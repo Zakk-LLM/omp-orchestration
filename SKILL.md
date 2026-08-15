@@ -62,10 +62,20 @@ machine total. Machine-local settings — the cap, the tier-to-model bindings �
 ## When not to use this
 
 Do the work yourself when it is a single obvious edit, a one-file read, or anything you can
-finish in less time than writing the spec. Never dispatch git mechanics — `omp_worktrees.sh
---rebase` and `omp_merge.sh` do them in one command, and the spec forbids workers from running
-them anyway. Fan out only when the work decomposes; your review capacity, not the worker count,
-is the limit.
+finish in less time than writing the spec. Fan out only when the work decomposes; your review
+capacity, not the worker count, is the limit — about three review-bearing agents in flight.
+
+Never dispatched, however large the run:
+
+- **Git mechanics** — `omp_worktrees.sh --rebase` and `omp_merge.sh` do them in one command, and
+  the spec forbids workers from running them anyway.
+- **A fix faster to make than to specify** — a typo, a wrong constant, a one-line guard.
+- **Anything you must verify line by line anyway** — review is the expensive half.
+- **Running a command to read its output** — you can run it directly.
+
+The test is whether a separate context window earns the spec plus the review: the same rename
+across 200 files does, the same rename in three files does not. A dispatched trivial task also
+holds a slot the machine cap counts and puts a review ahead of one that mattered.
 
 ## Workflow
 
@@ -167,6 +177,15 @@ the guards fire. Correct a running worker with `omp_note.sh`, which its spec tel
 returned agent or doing work that does not depend on one. A regression you can fix now is fixed
 ahead of the queue.
 
+#### Keeping your own context small
+
+The context that needs protecting is yours. A worker's context is disposable — created for one
+task, gone with it — so let workers read whatever they need, and never split a task or shorten a
+spec to save a worker's context. Only the report is bounded, because that is the part that lands
+in you: read `result.json` and `verify.json`, use `omp_status.sh --brief` as the digest, open
+`events.jsonl` only when something failed, and refer to artifacts by path instead of quoting
+them. Summarize for the user from the diff and the check results, not from the worker's prose.
+
 ### 7. Review — the part you never delegate
 
 An agent's report is a claim; a command you ran is evidence.
@@ -211,3 +230,4 @@ confirm with the user before anything outward-facing.
 - [references/worktrees.md](references/worktrees.md) — isolating parallel writers, merging, cleanup
 - [references/review-gate.md](references/review-gate.md) — the anti-optimism review protocol
 - [references/troubleshooting.md](references/troubleshooting.md) — failure modes and recovery
+- [references/evidence.md](references/evidence.md) — the measurements behind these defaults
