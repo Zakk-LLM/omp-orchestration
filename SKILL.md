@@ -51,7 +51,7 @@ worker that must *search* needs `--permission full`, where MCP search tools are 
 ```sh
 omp --version || echo "omp not installed — stop and tell the user"
 "$OMP_SKILL/scripts/omp_agents.sh" --list      # every engine's agents, machine-wide
-omp models aicardlc | head                     # models this config can actually reach
+omp models | head                              # models this config can actually reach
 ```
 
 The cap is shared with the codex and opencode toolkits: all three lock the same slot directory
@@ -139,6 +139,8 @@ thinking, and when that holds the tiers should exhaust the thinking levels on th
 before paying for the top one. Test it before assuming either way: dispatch the same hard task
 twice, once at each configuration, compare the results against something checkable, and compare
 `usage.cost`. Bind the answer in `OMP_TIER_<TIER>_MODEL` and leave this file provider-neutral.
+
+Both halves of a tier are configurable, so the ladder is data rather than code: `OMP_TIER_<TIER>_MODEL` binds the model and `OMP_TIER_<TIER>_THINKING` overrides the thinking. Set both in the machine-local env file and no job has to carry `--thinking` by hand — a ladder that needs a flag on every dispatch is a ladder that will be forgotten on one.
 
 What does not change: a read-only worker's bill is almost all input, so the cheapest model at
 low thinking is right for most of a run, and promoting a task is a decision rather than a
