@@ -132,8 +132,17 @@ search for it; each agent runs the targeted tests and the full suite runs once a
 | `max` | `max` | one problem a `frontier` agent already failed twice | 7200+ |
 
 A tier always sets the thinking level, and sets the model when `OMP_TIER_<TIER>_MODEL` is bound.
-Below `deep` the model changes, above it the thinking does — the cheap model is an order of
-magnitude cheaper per token, and a read-only worker's bill is almost all input.
+
+Which half of the ladder to climb first is a question about your models, not a rule. A mid-tier
+model at maximum thinking is often better *and* cheaper than a top-tier model at moderate
+thinking, and when that holds the tiers should exhaust the thinking levels on the mid model
+before paying for the top one. Test it before assuming either way: dispatch the same hard task
+twice, once at each configuration, compare the results against something checkable, and compare
+`usage.cost`. Bind the answer in `OMP_TIER_<TIER>_MODEL` and leave this file provider-neutral.
+
+What does not change: a read-only worker's bill is almost all input, so the cheapest model at
+low thinking is right for most of a run, and promoting a task is a decision rather than a
+default.
 
 | `--permission` | tools granted | use for |
 |----------------|---------------|---------|

@@ -46,9 +46,20 @@ tier ladder changes the model below `deep` and the thinking level above it, and 
 
 ## Dispatch overhead
 
-A one-word reply with no tool use metered at roughly 16.6K input tokens, against roughly 20K for
-`codex exec` and 8K for `opencode run` on the same account. That fixed cost is paid on every
-dispatch before the task begins, so trivial work belongs batched into fewer agents.
+A one-word reply with no tool use metered at roughly 16.6K input tokens through a custom
+OpenAI-compatible gateway, and roughly 7.8K through the native `openai-codex` provider on the
+same machine — the provider's own preamble is the difference. Compare with roughly 20K for
+`codex exec` and 8K for `opencode run`. That fixed cost is paid on every dispatch before the
+task begins, so trivial work belongs batched into fewer agents.
+
+## Which half of the ladder to climb
+
+The tier ladder can escalate the thinking level on a mid-tier model or switch to a top-tier one,
+and which is better is an account-specific question. Reported on this machine: the mid model at
+`max` reads as stronger than the top model at `high`, which would make the thinking ladder the
+one to exhaust first. That is an impression, not a measurement — the honest test is the same
+hard task at both configurations, judged against a checkable answer and compared on
+`usage.cost`. The repository stays neutral; the binding lives in the machine-local env file.
 
 ## Concurrency
 
