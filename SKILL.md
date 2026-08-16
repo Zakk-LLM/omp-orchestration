@@ -54,9 +54,19 @@ omp --version || echo "omp not installed — stop and tell the user"
 omp models | head                              # models this config can actually reach
 ```
 
-The cap is shared with the codex and opencode toolkits: all three lock the same slot directory
-and all three counters read all three registries, so `AGENT_MAX_AGENTS` (default 5) is the
-machine total. Machine-local settings — the cap, the tier-to-model bindings — live in
+The agent cap exists to protect two different things, and they separate here. A metered engine
+shares `AGENT_MAX_AGENTS` (default 5) with its siblings so a rate limit is not blown; an engine
+with no such limit — omp on a subscription — locks its own slot namespace under
+`OMP_MAX_AGENTS` instead, so it cannot starve the metered ones and is not starved by them.
+Verified at 32 concurrent on one machine.
+
+What that number never covers is your review capacity. Thirty agents can run while three can be
+reviewed properly, so a high cap belongs to uniform mechanical work whose review is batched, and
+the working default stays at about three review-bearing agents in flight. `omp_capacity.sh`
+still bounds the answer by cores, free memory, and load, with a soft ceiling of 8 that
+`AGENT_CONCURRENCY_CEILING` raises for a run that has earned it.
+
+Machine-local settings — the caps, the tier bindings, the ceiling — live in
 `${XDG_CONFIG_HOME:-~/.config}/agent-orchestration.env`, which every wrapper sources.
 
 ## When not to use this

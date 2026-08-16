@@ -89,9 +89,13 @@ hang until the deadline. The allowlist, not an approval rule, is the boundary.
 
 ## Shared with the sibling toolkits
 
-The agent cap is machine-wide across all three engines: they lock the same slot directory and
-each counter reads every registry, so `AGENT_MAX_AGENTS` (default 5) is the total, not five
-each. Tier-to-model bindings and the cap live in
+The agent cap protects two different things. A metered engine shares `AGENT_MAX_AGENTS`
+(default 5) with its siblings so a rate limit is not blown; omp on a subscription has no such
+limit, so it locks its own namespace under `OMP_MAX_AGENTS` and neither starves the metered
+engines nor waits behind them — 32 concurrent verified on one machine. That number is not your
+review capacity: three agents needing a diff read each is still the working default, and
+`AGENT_CONCURRENCY_CEILING` raises the soft ceiling only for uniform work whose review is
+batched. Tier-to-model bindings and the cap live in
 `${XDG_CONFIG_HOME:-~/.config}/agent-orchestration.env`.
 
 Tiers, dependency ordering, worktree isolation, bounded waiting, deadline warnings, the

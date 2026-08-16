@@ -215,8 +215,12 @@ ARGS+=(--approval-mode yolo)
 [ -n "$RESUME" ] && ARGS+=(-r "$RESUME")
 
 if [ "$ADMISSION" != off ]; then
+  # omp runs on a subscription with no per-minute quota to protect, so its budget is the
+  # machine and the reviewer, not an API limit. It therefore locks its own slot namespace and
+  # honours its own cap: sharing the metered engines' slots would let it starve them.
+  SLOTS="$SLOTS/omp"
   mkdir -p "$SLOTS" 2>/dev/null
-  MAXA=${AGENT_MAX_AGENTS:-${OMP_MAX_AGENTS:-5}}
+  MAXA=${OMP_MAX_AGENTS:-${AGENT_MAX_AGENTS:-5}}
   SLOT_FD=; WAITED=0
   while [ -z "$SLOT_FD" ]; do
     for i in $(seq 1 "$MAXA"); do

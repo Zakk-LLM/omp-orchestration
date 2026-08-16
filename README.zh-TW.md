@@ -80,7 +80,9 @@ scripts/omp_merge.sh --run-dir "$RUN" --repo /path/to/repo --into main --check "
 
 ## 與姊妹工具共用的部分
 
-代理上限跨三個引擎共用：它們鎖定同一個名額目錄，每個計數器都讀取全部登記簿，所以 `AGENT_MAX_AGENTS`（預設 5）是機器總數，不是每個引擎各 5。難度級別對應的模型與上限寫在 `${XDG_CONFIG_HOME:-~/.config}/agent-orchestration.env`。
+代理上限保護的是兩件不同的事。有計量的引擎與姊妹工具共用 `AGENT_MAX_AGENTS`（預設 5），避免打爆速率限制；omp 走訂閱制沒有這種限制，因此鎖定自己的名額空間並使用 `OMP_MAX_AGENTS`，既不會餓死有計量的引擎，也不必排在它們後面。本機實測 32 個並行可行。
+
+這個數字不等於你的審查產能。三十個代理可以同時執行，但只有三個能被好好審查，所以高上限屬於審查可批次處理的一致性機械工作。`AGENT_CONCURRENCY_CEILING` 用來提高軟上限。難度級別對應的模型與上限寫在 `${XDG_CONFIG_HOME:-~/.config}/agent-orchestration.env`。
 
 難度分級、依賴排序、worktree 隔離、有時限的等待、逾時預警、回歸範圍工具、審查閘門與原子整合，行為與姊妹版相同。詳見 [SKILL.md](SKILL.md) 與 `references/`：
 

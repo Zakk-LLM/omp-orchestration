@@ -21,7 +21,9 @@ Prints the suggested concurrency and the numbers it came from. Override the memo
 with --per-agent-mb when you know what the workload actually costs.
 
 opencode agents started by other sessions or other terminals are counted: the answer never
-exceeds OMP_MAX_AGENTS (default 5) minus what is already running machine-wide.
+exceeds OMP_MAX_AGENTS minus the omp agents already running. omp is not rate limited here, so
+that cap exists for the machine and the reviewer rather than for a quota; the codex and opencode
+toolkits keep their own shared cap.
 EOF
 }
 
@@ -39,9 +41,11 @@ esac
 # quota and this machine are shared, and nothing else coordinates them.
 # One counter for the whole toolkit: omp_agents.sh knows which processes are real agents,
 # which are an idle TUI or a zombie, and which are the wrapper's own child.
-RUNNING=$("$(cd "$(dirname "$0")" && pwd)/omp_agents.sh" --count 2>/dev/null)
+# omp has no per-minute quota to protect, so its budget is its own: count omp agents against
+# the omp cap. The machine limits below still bind, and they are the real ceiling now.
+RUNNING=$("$(cd "$(dirname "$0")" && pwd)/omp_agents.sh" --count --engine omp 2>/dev/null)
 RUNNING=${RUNNING:-0}
-GLOBAL_MAX=${OMP_MAX_AGENTS:-5}
+GLOBAL_MAX=${OMP_MAX_AGENTS:-${AGENT_MAX_AGENTS:-5}}
 FREE=$(( GLOBAL_MAX - RUNNING ))
 [ "$FREE" -lt 0 ] && FREE=0
 
@@ -58,8 +62,13 @@ N=$BY_CPU
 [ "$BY_MEM" -lt "$N" ] && N=$BY_MEM
 [ "$BUSY" = 1 ] && N=$(( N / 2 ))
 [ "$N" -lt 1 ] && N=1
-# Beyond a handful the API queues anyway and the event logs stop being reviewable.
-[ "$N" -gt 8 ] && N=8
+# Beyond a handful a metered API just queues, so the default ceiling is small. An engine with
+# no rate limit is bounded by the machine instead: raise AGENT_CONCURRENCY_CEILING for it.
+# Note what this number is not: your review capacity. Thirty agents can run while only three
+# can be reviewed properly, so a high ceiling belongs to uniform mechanical work whose review
+# is batched, not to work that needs a diff read each.
+CEILING=${AGENT_CONCURRENCY_CEILING:-8}
+[ "$N" -gt "$CEILING" ] && N=$CEILING
 # The global cap wins: it counts agents this session cannot see.
 [ "$N" -gt "$FREE" ] && N=$FREE
 
@@ -68,7 +77,7 @@ printf 'weight=%s per-agent=%sMB cores=%s avail=%sMB load=%s cpu-cap=%s mem-cap=
   "$WEIGHT" "$PER" "$CORES" "$AVAIL_MB" "$LOAD" "$BY_CPU" "$BY_MEM" "$RUNNING" "$GLOBAL_MAX" "$FREE" \
   "$([ "$BUSY" = 1 ] && echo ' (machine busy: halved)')" >&2
 if [ "$N" = 0 ]; then
-  printf 'no free slot: %s agents already running elsewhere (OMP_MAX_AGENTS=%s)\n' \
+  printf 'no free slot: %s omp agents already running (OMP_MAX_AGENTS=%s)\n' \
     "$RUNNING" "$GLOBAL_MAX" >&2
 fi
 exit 0
