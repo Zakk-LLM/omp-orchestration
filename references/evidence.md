@@ -61,6 +61,18 @@ one to exhaust first. That is an impression, not a measurement — the honest te
 hard task at both configurations, judged against a checkable answer and compared on
 `usage.cost`. The repository stays neutral; the binding lives in the machine-local env file.
 
+## Resource footprint
+
+A read-only agent holds about 217 MB RSS, measured across four concurrent workers on one
+machine (215, 217, 217, 218). On a 32-thread box with 33 GB free that allows well over a
+hundred by memory alone, so memory is not what limits a fan-out: the API's rate limit is, where
+one exists, and the reviewer's throughput is, always. The per-agent estimates in
+`omp_capacity.sh` stay above the measurement on purpose, because `medium` and `heavy` are meant
+to cover the test runners and compilers an agent spawns, which this measurement does not.
+
+Twelve agents launched one second apart produced zero lock retries, so the two-second default
+stagger is conservative for an engine with no rate limit.
+
 ## Concurrency
 
 Session state is shared, so simultaneous launches can lose to a busy database. Starts are
