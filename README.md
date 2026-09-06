@@ -79,13 +79,17 @@ Every script documents its options under `--help`.
 
 | Profile | Tools granted | Use for |
 |---|---|---|
-| `read-only` | `read, grep, glob, lsp, yield` | research, audits, review |
+| `read-only` | `read, grep, glob, lsp, yield` | research, review, any judgement reachable by reading |
 | `workspace-write` | plus `write, edit, bash, ast_edit` | implementation |
 | `full` | every tool, MCP included | search-dependent work |
 | `bypass` | every tool, approvals off | only in a workspace you would hand a shell to |
 
 Every profile disables approvals, because print mode has nobody to answer a prompt and would
 hang until the deadline. The allowlist, not an approval rule, is the boundary.
+
+These profile names are omp's own. `read-only` here is a tool allowlist, not codex's kernel
+sandbox, and omp has no `inspect` profile like opencode's — so an audit that must run tests or a
+linter goes to `workspace-write` on this engine, or to a sibling.
 
 ## Shared with the sibling toolkits
 
@@ -116,6 +120,14 @@ siblings. Read [SKILL.md](SKILL.md) and `references/`:
   a `database is locked` failure retries with backoff.
 - Two agents writing one checkout overwrite each other; worktrees and `PLAN.md` ownership
   prevent it.
+
+## Checks
+
+`sh scripts/check-all.sh` runs everything this repository can check about itself: the tier
+ladder still projects to the agreed values, the description states this engine's read-only
+execution boundary, both READMEs keep the note that these profile names do not carry to the
+siblings, and every shell script parses. The controls that follow break each of those on a
+temporary copy to prove the checks can still fail. CI runs the same command.
 
 ## License
 

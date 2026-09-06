@@ -1,6 +1,6 @@
 ---
 name: omp
-description: Drive the omp (oh-my-pi) CLI as a fleet of worker agents while you stay the orchestrator and reviewer. Use when a task is large enough to split across parallel workers — feature implementation, refactors, bug hunts, test writing, documentation drafting, research, multi-file audits — or whenever the user asks to delegate work to omp. You write the plan, dispatch scoped agents, supervise, review every diff yourself, and own the commit, merge, and deploy steps that workers are never allowed to touch. Sibling of the `codex` and `opencode` skills: same workflow, same run directory, different engine.
+description: Drive the omp (oh-my-pi) CLI as a fleet of worker agents while you stay the orchestrator and reviewer. Use when a task is large enough to split across parallel workers — feature implementation, refactors, bug hunts, test writing, documentation drafting, research, multi-file audits — or whenever the user asks to delegate work to omp. You write the plan, dispatch scoped agents, supervise, review every diff yourself, and own the commit, merge, and deploy steps that workers are never allowed to touch. Sibling of the `codex` and `opencode` skills: same workflow, same run directory, different engine. omp's `read-only` grants no `bash`, so an audit that must run a check does not belong on this engine.
 ---
 
 # omp Orchestration
@@ -158,7 +158,7 @@ default.
 
 | `--permission` | tools granted | use for |
 |----------------|---------------|---------|
-| `read-only` | `read, grep, glob, lsp, yield` | research, audits, review |
+| `read-only` | `read, grep, glob, lsp, yield` | research, review, any judgement reachable by reading |
 | `workspace-write` | plus `write, edit, bash, ast_edit` | implementation |
 | `full` | every tool, MCP included | search-dependent work, with care |
 | `bypass` | every tool, approvals off | only in a workspace you would hand a shell to |
@@ -166,6 +166,12 @@ default.
 Every profile runs with approvals disabled, because a print-mode run has nobody to answer a
 prompt and would sit until the deadline. That is exactly why the allowlist, not an approval
 rule, is the boundary.
+
+These profile names are omp's own. `read-only` here is a tool allowlist, not codex's kernel
+sandbox, and omp has no `inspect` profile like opencode's — so an audit that must run tests or
+a linter goes to `workspace-write` on this engine, or to a sibling. Reusing a sibling's mental
+model of the same name is how a research agent ends up unable to run the check it was sent to
+run.
 
 ### 5. Dispatch
 

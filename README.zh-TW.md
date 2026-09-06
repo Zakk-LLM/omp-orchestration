@@ -71,12 +71,14 @@ scripts/omp_merge.sh --run-dir "$RUN" --repo /path/to/repo --into main --check "
 
 | 設定檔 | 授予的工具 | 用於 |
 |---|---|---|
-| `read-only` | `read, grep, glob, lsp, yield` | 研究、稽核、審查 |
+| `read-only` | `read, grep, glob, lsp, yield` | 研究、審查、只靠閱讀就能下的判斷 |
 | `workspace-write` | 再加上 `write, edit, bash, ast_edit` | 實作 |
 | `full` | 全部工具，含 MCP | 需要搜尋的工作 |
 | `bypass` | 全部工具且關閉核准 | 只用於你願意直接給出 shell 的工作區 |
 
 所有設定檔都關閉核准提示，因為 print 模式沒有人能回答，會一直等到期限。邊界來自允許清單，不是核准規則。
+
+這些設定檔名稱是 omp 自己的。這裡的 `read-only` 是工具允許清單，不是 codex 的核心沙箱，omp 也沒有 opencode 那樣的 `inspect` 設定檔——要跑測試或 linter 的稽核，在這個引擎上得用 `workspace-write`，或者交給姊妹引擎。
 
 ## 與姊妹工具共用的部分
 
@@ -98,6 +100,13 @@ scripts/omp_merge.sh --run-dir "$RUN" --repo /path/to/repo --into main --check "
 - `--tools` 只接受固定的工具名稱，寫錯會在執行開始前中止。
 - 工作階段狀態共用，因此同時啟動會在機器層級的鎖後方錯開，遇到 `database is locked` 以退避重試。
 - 兩個代理寫入同一個工作區會互相覆蓋，以 worktree 與 `PLAN.md` 的檔案歸屬預防。
+
+## 檢查
+
+`sh scripts/check-all.sh` 會跑完這個倉庫能對自己做的全部檢查：tier 階梯仍投影到約定的值、
+description 寫著本引擎 read-only 的執行邊界、兩份 README 都保留「這些設定檔名稱不能沿用到
+姊妹引擎」那句話，以及每個 shell 腳本都能解析。之後的控制會在臨時副本上逐條破壞，證明這些
+檢查還會變紅。CI 跑的是同一條命令。
 
 ## 授權
 
