@@ -12,6 +12,13 @@ Same design as the `codex` and `opencode` skills — one run directory, tiers by
 dependency ordering, bounded waiting, an evidence-based review gate, atomic integration — with
 omp as the engine. Only the engine-specific parts are marked below.
 
+## Relations
+
+- Depends on: nothing.
+- Parallel: `codex` and `opencode` are the same design on other engines. Pick one per run.
+- Hands off to: `zakk-review` for judging what a worker returns and `zakk-workflow` for landing it and the completion report, when they are installed. Without them, the review section below is the gate.
+- Upstream: `zakk-workflow` and `zakk-maintain` send dispatch here.
+
 ## What omp gives you that the others do not
 
 **A real cost figure.** Every assistant message carries `usage.cost` in dollars, so `meta.json`
