@@ -146,7 +146,7 @@ search for it; each agent runs the targeted tests and the full suite runs once a
 | `standard` | `medium` | default: a contained feature, docs, tests for one module | 900–1800 |
 | `deep` | `high` | changes across several files, non-obvious bugs, refactors | 1800–3600 |
 | `frontier` | `xhigh` | architecture, concurrency, performance, vague requirements | 3600–5400 |
-| `max` | `max` | one problem a `frontier` agent already failed twice | 5400 |
+| `max` | `max` | one problem a `frontier` agent already failed twice | 3600–5400 |
 
 The `7200+` bands above are history: nothing runs past 5400.
 
