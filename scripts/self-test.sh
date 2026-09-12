@@ -554,6 +554,9 @@ fresh || exit 2
 sed -i 's/^| `deep` | `high`/| `deep` | `medium`/' "$TMP/w/SKILL.md"
 sed -i 's/| `high` | 1800–3600 |/| `medium` | 1800–3600 |/' "$TMP/w/SKILL.md"
 expect 1 "tier maps to the wrong effort" python3 scripts/check-contract.py "$ENGINE" "$TMP/w/SKILL.md"
+fresh || exit 2
+expect 0 "reflection tool-budget controls" python3 "$TMP/event-controls.py" "$TMP/w" budget
+cat "$TMP/out"
 
 # A timeout drifts.
 fresh || exit 2

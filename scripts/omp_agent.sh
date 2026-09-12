@@ -29,6 +29,7 @@ Model and limits:
   --role NAME        omp agent definition to use as the system prompt (~/.omp/agent/agents)
   --timeout SEC      hard wall-clock limit                   (default: 1800)
   --stall SEC        kill when no event arrives for this long (default: off)
+  --max-tools N    invalidate a result after more than N completed tools (default: 0, unlimited)
 
 Permissions (omp has no sandbox; the tool allowlist is the boundary):
   --permission MODE  read-only|workspace-write|full|bypass   (default: read-only)
@@ -46,7 +47,7 @@ EOF
 }
 
 RUN_DIR=; LABEL=; PROMPT_FILE=; PROMPT_TEXT=; CWD=$PWD
-THINKING=; THINKING_SET=0; MODEL=; ROLE=; TIMEOUT=1800; STALL=0; RESUME=
+THINKING=; THINKING_SET=0; MODEL=; ROLE=; TIMEOUT=1800; STALL=0; MAX_TOOLS=0; RESUME=
 SCHEMA=; TIER=; PERMISSION=read-only; NETWORK=0; ALLOW_GIT=0; ADMISSION=wait
 WORKTREE=; WORKTREE_BASE=HEAD; ALLOW_STALE=0; ADD_DIRS=()
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -79,6 +80,7 @@ while [ $# -gt 0 ]; do
     --role) ROLE=$2; shift 2 ;;
     --timeout) TIMEOUT=$2; shift 2 ;;
     --stall) STALL=$2; shift 2 ;;
+    --max-tools) MAX_TOOLS=$2; shift 2 ;;
     --permission) PERMISSION=$2; shift 2 ;;
     --network) NETWORK=1; shift ;;
     --allow-git) ALLOW_GIT=1; shift ;;
@@ -118,6 +120,7 @@ case "$PERMISSION" in read-only|workspace-write|full|bypass) ;;
   *) echo "bad --permission: $PERMISSION" >&2; exit 2 ;; esac
 case "$ADMISSION" in wait|refuse|off) ;; *) echo "bad --admission: $ADMISSION (wait|refuse|off)" >&2; exit 2 ;; esac
 case "$LABEL" in */*|.|..) echo "invalid label: $LABEL (no path separators)" >&2; exit 2 ;; esac
+case "$MAX_TOOLS" in *[!0-9]*|"") echo "bad --max-tools: $MAX_TOOLS" >&2; exit 2 ;; esac
 [ "$PERMISSION" = bypass ] && echo "WARNING: $LABEL runs with every tool and no approvals" >&2
 
 CWD=$(cd "$CWD" && pwd) || exit 2
@@ -299,6 +302,24 @@ if [ "$STALL" -gt 0 ] 2>/dev/null; then
   WATCHER=$!
 fi
 
+if [ "$MAX_TOOLS" -gt 0 ] 2>/dev/null && kill -0 "$AGENT_PID" 2>/dev/null; then
+  ( while kill -0 "$AGENT_PID" 2>/dev/null; do
+      sleep 2
+      COUNT=$(PYTHONPATH="$HERE" python3 -c \
+        'from omp_events import scan_tools; import sys; print(len(scan_tools(sys.argv[1], 0)[0]))' \
+        "$OUT/events.jsonl")
+      if [ "$COUNT" -gt "$MAX_TOOLS" ]; then
+        echo "tool budget: $COUNT completions exceeds $MAX_TOOLS, interrupting" >> "$OUT/stderr.log"
+        touch "$OUT/.over-budget"
+        kill -INT "$AGENT_PID" 2>/dev/null
+        sleep 2
+        kill -KILL "$AGENT_PID" 2>/dev/null
+        exit 0
+      fi
+    done ) &
+  BUDGET_WATCHER=$!
+fi
+
 STARTED_JSON="$OUT/started.json"
 LABEL="$LABEL" CWD="$CWD" TIMEOUT="$TIMEOUT" STALL="$STALL" START="$START" PID="$AGENT_PID" \
   python3 -c 'import json, os, sys
@@ -322,6 +343,7 @@ rm -f "$REG_META"
 cleanup() {
   kill -INT "$AGENT_PID" 2>/dev/null
   [ -n "${WATCHER:-}" ] && kill "$WATCHER" 2>/dev/null
+  [ -n "${BUDGET_WATCHER:-}" ] && kill "$BUDGET_WATCHER" 2>/dev/null
   "$HERE/omp_agents.sh" --unregister "$AGENT_PID" 2>/dev/null
 }
 trap cleanup EXIT
@@ -331,16 +353,26 @@ trap 'cleanup; exit 143' TERM
 if [ "${EARLY_DONE:-0}" = 1 ]; then CODE=$EARLY_CODE; else wait "$AGENT_PID"; CODE=$?; fi
 "$HERE/omp_agents.sh" --unregister "$AGENT_PID" 2>/dev/null
 [ -n "${WATCHER:-}" ] && kill "$WATCHER" 2>/dev/null
+[ -n "${BUDGET_WATCHER:-}" ] && kill "$BUDGET_WATCHER" 2>/dev/null
+OVER_BUDGET=0
+TOOL_COMPLETIONS=$(PYTHONPATH="$HERE" python3 -c \
+  'from omp_events import scan_tools; import sys; print(len(scan_tools(sys.argv[1], 0)[0]))' \
+  "$OUT/events.jsonl")
+if [ "$MAX_TOOLS" -gt 0 ] && [ "$TOOL_COMPLETIONS" -gt "$MAX_TOOLS" ]; then
+  OVER_BUDGET=1
+  touch "$OUT/.over-budget"
+  CODE=66
+fi
 [ -f "$OUT/.stalled" ] && { STALLED=1; rm -f "$OUT/.stalled"; }
 END=$(date +%s)
 rm -f "$OUT/.prompt-with-schema.md"
 
 python3 - "$OUT" "$LABEL" "$CWD" "$THINKING" "$PERMISSION" "$CODE" "$((END - START))" \
          "$RESUME" "$STALLED" "$WORKTREE_BRANCH" "$BASE_SHA" "$MODEL" "$BASE_REF" \
-         "${SCHEMA:-}" "${ROLE:-}" "$HERE" <<'PY'
+         "${SCHEMA:-}" "${ROLE:-}" "$HERE" "$OVER_BUDGET" <<'PY'
 import json, sys, pathlib
 (out, label, cwd, thinking, permission, code, dur, resume, stalled, branch, base_sha,
- model, base_ref, schema, role, scripts) = sys.argv[1:17]
+ model, base_ref, schema, role, scripts, over_budget) = sys.argv[1:18]
 sys.path.insert(0, scripts)
 from omp_events import scan_tools
 out = pathlib.Path(out)
@@ -427,6 +459,7 @@ meta = {
     "tool_calls": tool_calls, "failed_commands": failed_tools, "files_touched": sorted(files),
     "errors": errors[:5], "error_count": len(errors), "schema_error": schema_error,
     "timed_out": code in (124, 137) and stalled != "1",
+    "over_budget": over_budget == "1",
     "stalled": stalled == "1", "reconnects": reconnects,
     "transient_failure": bool(code != 0 and reconnects and not usage),
     "worktree_branch": branch or None, "base_sha": base_sha or None, "base_ref": base_ref or None,
