@@ -7,7 +7,7 @@ set -uo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: omp_impact.sh --repo DIR [--base REF] [--limit N] [--format text|md]
+Usage: impact.sh --repo DIR [--base REF] [--limit N] [--format text|md]
 
   --repo DIR    repository or worktree to inspect
   --base REF    diff against this ref instead of the working tree

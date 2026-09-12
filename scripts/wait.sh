@@ -6,7 +6,7 @@ set -uo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: omp_wait.sh <run-dir> [--handled a,b,...] [--interval SEC] [--timeout SEC]
+Usage: wait.sh <run-dir> [--handled a,b,...] [--interval SEC] [--timeout SEC]
 
 Prints "<label> <state>" for every agent that has finished and is not in --handled,
 as soon as at least one exists. Exit 0 when something is printed, 1 on timeout,

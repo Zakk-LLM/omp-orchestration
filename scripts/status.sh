@@ -5,7 +5,7 @@ set -uo pipefail
 case "${1:-}" in
   -h|--help|"")
     cat <<'EOF'
-Usage: omp_status.sh <run-dir> [--full|--brief]
+Usage: status.sh <run-dir> [--full|--brief]
 
 Prints one row per agent (state, duration, output tokens), the run's token totals, and each
 agent's thread id with a truncated head of its result. --full prints results untruncated;

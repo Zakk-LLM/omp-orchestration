@@ -6,7 +6,7 @@ set -uo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: omp_verify.sh <run-dir> <label> [--repo DIR] [--base REF] [--check "CMD"]...
+Usage: verify.sh <run-dir> <label> [--repo DIR] [--base REF] [--check "CMD"]...
 
   --repo DIR    repository or worktree to inspect  (default: the agent's recorded cwd)
   --base REF    compare against this ref instead of the working tree (e.g. main)

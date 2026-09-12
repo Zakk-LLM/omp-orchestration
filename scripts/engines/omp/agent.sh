@@ -5,10 +5,10 @@ set -uo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: omp_agent.sh --run-dir DIR --label NAME (--prompt-file FILE | --prompt TEXT) [options]
+Usage: agent.sh --engine omp --run-dir DIR --label NAME (--prompt-file FILE | --prompt TEXT) [options]
 
 Required:
-  --run-dir DIR      run directory created by omp_new_run.sh
+  --run-dir DIR      run directory created by new_run.sh
   --label NAME       agent label; artifacts land in <run-dir>/agents/<label>/
   --prompt-file F    task spec file (preferred)
   --prompt TEXT      inline task spec
@@ -234,7 +234,7 @@ if [ "$ADMISSION" != off ]; then
     [ -n "$SLOT_FD" ] && break
     if [ "$ADMISSION" = refuse ]; then
       echo "no free agent slot: $MAXA already running machine-wide (AGENT_MAX_AGENTS)" >&2
-      "$HERE/omp_agents.sh" --list >&2
+      "$HERE/../../agents.sh" --list >&2
       exit 3
     fi
     [ "$WAITED" = 0 ] && echo "waiting for an agent slot ($MAXA in use machine-wide)" >&2
@@ -311,7 +311,7 @@ if [ "$MAX_TOOLS" -gt 0 ] 2>/dev/null && kill -0 "$AGENT_PID" 2>/dev/null; then
   ( while kill -0 "$AGENT_PID" 2>/dev/null; do
       sleep 2
       COUNT=$(PYTHONPATH="$HERE" python3 -c \
-        'from omp_events import scan_tools; import sys; print(len(scan_tools(sys.argv[1], 0)[0]))' \
+        'from events import scan_tools; import sys; print(len(scan_tools(sys.argv[1], 0)[0]))' \
         "$OUT/events.jsonl")
       if [ "$COUNT" -gt "$MAX_TOOLS" ]; then
         echo "tool budget: $COUNT completions exceeds $MAX_TOOLS, interrupting" >> "$OUT/stderr.log"
@@ -342,26 +342,26 @@ json.dump({"label": os.environ["LABEL"], "cwd": os.environ["CWD"],
            "effort": os.environ["THINKING"] or "default", "sandbox": os.environ["PERMISSION"]},
           open(sys.argv[1], "w"))' "$REG_META" 2>/dev/null \
   || echo "warning: could not build registry metadata for $LABEL" >&2
-"$HERE/omp_agents.sh" --register "$AGENT_PID" "$REG_META" 2>/dev/null
+"$HERE/../../agents.sh" --register "$AGENT_PID" "$REG_META" 2>/dev/null
 rm -f "$REG_META"
 
 cleanup() {
   kill -INT "$AGENT_PID" 2>/dev/null
   [ -n "${WATCHER:-}" ] && kill "$WATCHER" 2>/dev/null
   [ -n "${BUDGET_WATCHER:-}" ] && kill "$BUDGET_WATCHER" 2>/dev/null
-  "$HERE/omp_agents.sh" --unregister "$AGENT_PID" 2>/dev/null
+  "$HERE/../../agents.sh" --unregister "$AGENT_PID" 2>/dev/null
 }
 trap cleanup EXIT
 trap 'cleanup; exit 130' INT
 trap 'cleanup; exit 143' TERM
 
 if [ "${EARLY_DONE:-0}" = 1 ]; then CODE=$EARLY_CODE; else wait "$AGENT_PID"; CODE=$?; fi
-"$HERE/omp_agents.sh" --unregister "$AGENT_PID" 2>/dev/null
+"$HERE/../../agents.sh" --unregister "$AGENT_PID" 2>/dev/null
 [ -n "${WATCHER:-}" ] && kill "$WATCHER" 2>/dev/null
 [ -n "${BUDGET_WATCHER:-}" ] && kill "$BUDGET_WATCHER" 2>/dev/null
 OVER_BUDGET=0
 TOOL_COMPLETIONS=$(PYTHONPATH="$HERE" python3 -c \
-  'from omp_events import scan_tools; import sys; print(len(scan_tools(sys.argv[1], 0)[0]))' \
+  'from events import scan_tools; import sys; print(len(scan_tools(sys.argv[1], 0)[0]))' \
   "$OUT/events.jsonl")
 if [ "$MAX_TOOLS" -gt 0 ] && [ "$TOOL_COMPLETIONS" -gt "$MAX_TOOLS" ]; then
   OVER_BUDGET=1
@@ -379,7 +379,7 @@ import json, sys, pathlib
 (out, label, cwd, thinking, permission, code, dur, resume, stalled, branch, base_sha,
  model, base_ref, schema, role, scripts, over_budget) = sys.argv[1:18]
 sys.path.insert(0, scripts)
-from omp_events import scan_tools
+from events import scan_tools
 out = pathlib.Path(out)
 session, usage, errors, files, reconnects = None, {}, [], set(), 0
 tool_events, _ = scan_tools(out / "events.jsonl", 0)

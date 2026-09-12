@@ -4,7 +4,7 @@
 # The worker keeps running: this is the executable half of "at the hundredth step, ask once
 # whether this is still what the maintainer wanted". The verdict lands next to the worker as
 # reflect-<n>.json (or .error); what to do about it is the supervisor's call, sent through
-# omp_note.sh in their own words. Nothing here kills or re-dispatches anything.
+# note.sh in their own words. Nothing here kills or re-dispatches anything.
 #
 # Bounds are enforced, not requested: ten completed tools via the wrapper's --max-tools and
 # the recount after exit, 390 seconds total (300 for the model plus the wrapper's 60-second
@@ -15,7 +15,7 @@ set -uo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: omp_reflect.sh <run-dir> <label> [options]
+Usage: reflect.sh <run-dir> <label> [options]
 
   --trigger tools|elapsed|maintainer  report trigger, default tools
   --tier T                            reflector tier, default cheap
@@ -73,10 +73,10 @@ PY
 
 build_prompt() {
   PROMPT_OUT="$WORKER/reflect-$NUMBER.prompt.md"
-  PYTHONPATH="$HERE" python3 - "$WORKER" "$RUN" "$NUMBER" "$HERE/../references/reflect-prompt.md" \
+  PYTHONPATH="$HERE/engines/omp" python3 - "$WORKER" "$RUN" "$NUMBER" "$HERE/../references/reflect-prompt.md" \
     "$PROMPT_OUT" <<'PY'
 import json, pathlib, sys
-from omp_events import scan_tools
+from events import scan_tools
 
 worker, run, number, question, output = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), \
     int(sys.argv[3]), pathlib.Path(sys.argv[4]), pathlib.Path(sys.argv[5])
@@ -118,8 +118,8 @@ REFLECT_STARTED=$(date +%s)
 STARTED_AT=$(read_started started_at) || { echo "invalid started.json" >&2; exit 2; }
 WORKER_CWD=$(read_started cwd) || { echo "invalid started.json" >&2; exit 2; }
 NUMBER=$(next_number) || exit 2
-TOOLS_AT_CHECK=$(PYTHONPATH="$HERE" python3 -c \
-  'from omp_events import scan_tools; import sys; print(sum(x["ok"] for x in scan_tools(sys.argv[1], 0)[0]))' \
+TOOLS_AT_CHECK=$(PYTHONPATH="$HERE/engines/omp" python3 -c \
+  'from events import scan_tools; import sys; print(sum(x["ok"] for x in scan_tools(sys.argv[1], 0)[0]))' \
   "$WORKER/events.jsonl")
 BASE_AT=$(STATE_FILE="$STATE" LABEL="$LABEL" STARTED_AT="$STARTED_AT" python3 <<'PY'
 import json, os
@@ -144,7 +144,7 @@ if [ "$REMAINING" -le 0 ]; then
   AGENT_CODE=124
 else
   AGENT_START_STAGGER=0 AGENT_LOCK_RETRIES=1 \
-    timeout --signal=KILL "$REMAINING" "$HERE/omp_agent.sh" "${ARGS[@]}"
+    timeout --signal=KILL "$REMAINING" "$HERE/agent.sh" --engine omp "${ARGS[@]}"
   AGENT_CODE=$?
 fi
 REFLECTOR="$REFLECT_RUN/agents/reflector"
@@ -230,10 +230,10 @@ fi
 # left alone.
 mkdir -p "$(dirname "$STATE")"
 flock "$STATE.lock" env STATE_FILE="$STATE" LABEL="$LABEL" STARTED_AT="$STARTED_AT" \
-  NUMBER="$NUMBER" WORKER="$WORKER" SCRIPTS="$HERE" python3 <<'PY'
+  NUMBER="$NUMBER" WORKER="$WORKER" SCRIPTS="$HERE/engines/omp" python3 <<'PY'
 import json, os, pathlib, sys, time
 sys.path.insert(0, os.environ["SCRIPTS"])
-from omp_events import scan_tools
+from events import scan_tools
 state_file = pathlib.Path(os.environ["STATE_FILE"])
 try: state = json.loads(state_file.read_text())
 except (OSError, json.JSONDecodeError): state = {}

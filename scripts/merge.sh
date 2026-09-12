@@ -6,7 +6,7 @@ set -uo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: omp_merge.sh --run-dir DIR --repo DIR --into BRANCH [options] [label ...]
+Usage: merge.sh --run-dir DIR --repo DIR --into BRANCH [options] [label ...]
 
   --run-dir DIR   run whose agents are being integrated
   --repo DIR      the integration repository (not a worktree)

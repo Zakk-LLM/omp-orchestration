@@ -11,7 +11,7 @@ ENV_FILE=${AGENT_ORCHESTRATION_ENV:-${XDG_CONFIG_HOME:-$HOME/.config}/agent-orch
 
 usage() {
   cat <<'EOF'
-Usage: omp_capacity.sh [light|medium|heavy] [--per-agent-mb N]
+Usage: capacity.sh [light|medium|heavy] [--per-agent-mb N]
 
   light   read-only reading, search, drafting            (~400 MB/agent)
   medium  edits plus a test file or a linter run         (~1200 MB/agent)
@@ -39,11 +39,11 @@ esac
 
 # Agents started from other terminals or other orchestrator sessions count too: the API
 # quota and this machine are shared, and nothing else coordinates them.
-# One counter for the whole toolkit: omp_agents.sh knows which processes are real agents,
+# One counter for the whole toolkit: agents.sh knows which processes are real agents,
 # which are an idle TUI or a zombie, and which are the wrapper's own child.
 # omp has no per-minute quota to protect, so its budget is its own: count omp agents against
 # the omp cap. The machine limits below still bind, and they are the real ceiling now.
-RUNNING=$("$(cd "$(dirname "$0")" && pwd)/omp_agents.sh" --count --engine omp 2>/dev/null)
+RUNNING=$("$(cd "$(dirname "$0")" && pwd)/agents.sh" --count --engine omp 2>/dev/null)
 RUNNING=${RUNNING:-0}
 GLOBAL_MAX=${OMP_MAX_AGENTS:-${AGENT_MAX_AGENTS:-5}}
 FREE=$(( GLOBAL_MAX - RUNNING ))

@@ -11,7 +11,7 @@ command -v bash >/dev/null 2>&1 || { echo "no bash on this machine"; exit 2; }
 
 bad=0
 n=0
-for f in install.sh scripts/*.sh; do
+for f in install.sh scripts/*.sh scripts/engines/*/*.sh; do
   [ -f "$f" ] || continue
   n=$((n + 1))
   if ! bash -n "$f" 2>&1; then

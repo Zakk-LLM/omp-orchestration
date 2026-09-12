@@ -6,9 +6,9 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: omp_note.sh <run-dir> <label> "note text"
-       omp_note.sh <run-dir> <label> --file NOTE_FILE
-       omp_note.sh <run-dir> <label> --show
+Usage: note.sh <run-dir> <label> "note text"
+       note.sh <run-dir> <label> --file NOTE_FILE
+       note.sh <run-dir> <label> --show
 
 Appends a timestamped entry to <run-dir>/agents/<label>/NOTES.md.
 Create the file before dispatching (an empty one is fine) so the worker's first read succeeds.

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Dispatch a whole fan-out from a job list: hardest first, concurrency derived from the
-# machine, everything else delegated to omp_agent.sh. One command instead of N background
+# machine, everything else delegated to agent.sh --engine omp. One command instead of N background
 # invocations the orchestrator has to track by hand.
 set -uo pipefail
 
@@ -8,7 +8,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 
 usage() {
   cat <<'EOF'
-Usage: omp_dispatch.sh --run-dir DIR --jobs FILE [--weight light|medium|heavy] [--max N]
+Usage: dispatch.sh --run-dir DIR --jobs FILE [--weight light|medium|heavy] [--max N]
                          [--common "ARGS"] [--dry-run]
 
 FILE is JSONL, one job per line. Recognized keys, all optional except label:
@@ -21,7 +21,7 @@ FILE is JSONL, one job per line. Recognized keys, all optional except label:
 
 prompt_file defaults to <run-dir>/agents/<label>/prompt.md. Independent jobs run
 hardest-tier-first so the long ones start while there is still capacity; concurrency is
-min(--max, omp_capacity.sh --weight).
+min(--max, capacity.sh --weight).
 
 depends_on holds labels that must finish successfully first. A dependent job is not dispatched
 until they do, and is skipped outright if any of them fails — running it against a missing or
@@ -46,17 +46,17 @@ done
 [ -n "$RUN" ] && [ -n "$JOBS" ] || { usage >&2; exit 2; }
 [ -f "$JOBS" ] || { echo "no such job file: $JOBS" >&2; exit 2; }
 
-CAP=$("$HERE/omp_capacity.sh" "$WEIGHT" 2>/dev/null) || CAP=3
+CAP=$("$HERE/capacity.sh" "$WEIGHT" 2>/dev/null) || CAP=3
 [ "$MAX" -gt 0 ] 2>/dev/null && [ "$MAX" -lt "$CAP" ] && CAP=$MAX
 # Capacity reaches zero when the machine-wide cap is already taken. Launching one job anyway
-# is correct: omp_agent.sh queues on the slot lock. A zero here would spin forever instead.
+# is correct: agent.sh queues on the slot lock. A zero here would spin forever instead.
 if [ "${CAP:-0}" -lt 1 ]; then
   CAP=1
   echo "machine is at the global cap; jobs will queue on the slot lock one at a time" >&2
 fi
 echo "dispatching with concurrency $CAP (weight $WEIGHT)" >&2
 
-# Expand each job into a complete omp_agent.sh argument line, hardest tier first, with its
+# Expand each job into a complete agent.sh argument line, hardest tier first, with its
 # dependencies attached so the scheduler below can hold it back.
 CMDS=$(RUN_DIR="$RUN" python3 - "$JOBS" <<'PY'
 import json, os, shlex, sys
@@ -123,7 +123,7 @@ PY
 
 if [ "$DRY" = 1 ]; then
   printf '%s\n' "$CMDS" | while IFS=$'\t' read -r label deps args; do
-    printf '%s%s: omp_agent.sh %s %s\n' "$label" \
+    printf '%s%s: agent.sh --engine omp %s %s\n' "$label" \
       "$([ "$deps" != - ] && echo " (after $deps)")" "$args" "$COMMON"
   done
   exit 0
@@ -142,7 +142,7 @@ FAIL=0
 launch() {
   local label=$1
   echo "start $label" >&2
-  eval "\"$HERE/omp_agent.sh\" ${ARGS[$label]} $COMMON" > "$RUN/logs/$label.dispatch.log" 2>&1 &
+  eval "\"$HERE/agent.sh\" --engine omp ${ARGS[$label]} $COMMON" > "$RUN/logs/$label.dispatch.log" 2>&1 &
   PID_OF[$label]=$!
 }
 
@@ -198,5 +198,5 @@ done
 for label in "${ORDER[@]}"; do
   [ "${RESULT[$label]:-}" = skipped ] && echo "$label: skipped, dependency failed" >&2
 done
-"$HERE/omp_status.sh" "$RUN" 2>/dev/null | head -n $(( ${#ORDER[@]} + 4 ))
+"$HERE/status.sh" "$RUN" 2>/dev/null | head -n $(( ${#ORDER[@]} + 4 ))
 exit $FAIL

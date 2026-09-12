@@ -6,7 +6,7 @@ set -euo pipefail
 case "${1:-}" in
   -h|--help)
     cat <<'EOF'
-Usage: omp_new_run.sh [SLUG]
+Usage: new_run.sh [SLUG]
 
 Creates <OMP_RUNS_DIR>/<timestamp>-<slug>/ with agents/ and schema/ plus a PLAN.md
 skeleton, and prints the path. The directory is created exclusively, so two runs started in

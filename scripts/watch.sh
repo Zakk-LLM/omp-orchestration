@@ -7,7 +7,7 @@ set -uo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: omp_watch.sh <run-dir> [--timeout SEC] [--interval SEC] [--state FILE]
+Usage: watch.sh <run-dir> [--timeout SEC] [--interval SEC] [--state FILE]
 
   --timeout SEC   maximum block, default 300. Pick it as the time until your next useful
                   action, not as how long the agents might take.
@@ -60,8 +60,8 @@ while :; do
         SCRIPTS_DIR="$HERE" python3 <<'PY'
 import json, os, pathlib, shlex, sys, time
 
-sys.path.insert(0, os.environ["SCRIPTS_DIR"])
-from omp_events import scan_tools
+sys.path.insert(0, str(pathlib.Path(os.environ["SCRIPTS_DIR"]) / "engines" / "omp"))
+from events import last_event, repeated_failure, scan_tools
 
 run = pathlib.Path(os.environ["RUN_DIR"])
 state_file = pathlib.Path(os.environ["STATE_FILE"])
@@ -69,39 +69,6 @@ try:
     seen = json.loads(state_file.read_text())
 except (OSError, json.JSONDecodeError):
     seen = {}
-
-def repeated_failure(path, window=40, threshold=8):
-    """A worker can emit events forever while getting nowhere: the same tool failing on the
-    same input is progress to the stall guard and waste to everyone else. Reads the tail only."""
-    try:
-        size = path.stat().st_size
-        with path.open("rb") as fh:
-            fh.seek(max(0, size - 262144))
-            lines = fh.read().decode(errors="replace").splitlines()
-    except OSError:
-        return None
-    fails = []
-    for line in lines:
-        if not line.startswith("{"):
-            continue
-        try:
-            ev = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        item = ev.get("item") or ev.get("part") or {}
-        state = item.get("state") or {}
-        status = state.get("status")
-        exit_code = item.get("exit_code")
-        failed = status == "error" or (exit_code not in (0, None))
-        if item.get("type") in ("tool", "command_execution", "tool_use") or status:
-            key = f"{item.get('tool') or item.get('type')}"
-            fails.append(key if failed else None)
-    recent = [f for f in fails[-window:] if f]
-    if not recent:
-        return None
-    top = max(set(recent), key=recent.count)
-    n = recent.count(top)
-    return (top, n) if n >= threshold else None
 
 agents = [a for a in sorted((run / "agents").glob("*")) if a.is_dir()]
 # A directory holding only a prepared spec has not been dispatched: events.jsonl appears when
@@ -167,7 +134,7 @@ for a in dispatched:
             elapsed = max(0, int((now - float(reflect.get("base_at", started_at))) / 60))
             trigger = "tools" if tool_due else "elapsed"
             command = " ".join(shlex.quote(value) for value in
-                               (str(pathlib.Path(os.environ["SCRIPTS_DIR"]) / "omp_reflect.sh"),
+                               (str(pathlib.Path(os.environ["SCRIPTS_DIR"]) / "reflect.sh"),
                                 str(run), a.name, "--trigger", trigger,
                                 "--state", os.environ["STATE_FILE"]))
             reflect["pending"] = True
@@ -224,25 +191,6 @@ for a in dispatched:
 
 # Liveness is the mtime plus the last event, never the whole log: an event file grows to
 # megabytes, and reading it to answer "is it alive" is the most expensive way to ask.
-def last_event(path):
-    try:
-        size = path.stat().st_size
-        with path.open("rb") as fh:
-            fh.seek(max(0, size - 4096))
-            lines = [l for l in fh.read().decode(errors="replace").splitlines() if l.startswith("{")]
-    except OSError:
-        return None
-    for line in reversed(lines):
-        try:
-            ev = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        item = ev.get("item") or {}
-        kind = item.get("type") or ev.get("type")
-        detail = (item.get("command") or item.get("query") or item.get("text") or "")[:60]
-        return f"{kind} {detail}".strip()
-    return None
-
 peeked = False
 if os.environ.get("PEEK") == "1":
     for a in dispatched:

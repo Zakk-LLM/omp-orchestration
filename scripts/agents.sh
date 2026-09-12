@@ -15,14 +15,14 @@ ENV_FILE=${AGENT_ORCHESTRATION_ENV:-${XDG_CONFIG_HOME:-$HOME/.config}/agent-orch
 
 usage() {
   cat <<'EOF'
-Usage: omp_agents.sh [--list | --count | --prune | --slots]
+Usage: agents.sh [--list | --count | --prune | --slots]
 
   --list    live agents: pid, label, tier, elapsed, workspace, run directory
   --count   number of live agents (for scripts); add --engine NAME to count one engine
   --prune   drop entries whose process is gone
   --slots   free slots against OMP_MAX_AGENTS (default 5)
 
-Internal, used by omp_agent.sh:
+Internal, used by agent.sh --engine omp:
   --register PID FILE      register a running agent, metadata read from FILE (JSON)
   --unregister PID
 
@@ -154,7 +154,7 @@ for f in stale:
     try: f.unlink()
     except OSError: pass
 
-# Every counter uses the same set, so --slots and omp_capacity.sh cannot disagree.
+# Every counter uses the same set, so --slots and capacity.sh cannot disagree.
 live += scan_unregistered({d["pid"] for d in live})
 
 if action == "--count":

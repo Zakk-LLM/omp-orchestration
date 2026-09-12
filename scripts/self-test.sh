@@ -6,7 +6,7 @@
 # safe inside a commit hook and removes the need for a "remember to restore it" convention.
 set -u
 cd "$(dirname "$0")/.." || exit 2
-ENGINE=${1:?usage: self-test.sh <engine>}
+ENGINE=${1:-omp}
 command -v python3 >/dev/null 2>&1 || { echo "no python3, controls cannot run"; exit 2; }
 
 TMP=$(mktemp -d) || exit 2
@@ -17,14 +17,10 @@ fail=0
 # Start each control from a clean copy so one break cannot leak into the next.
 fresh() {
   rm -rf "$TMP/w"
-  mkdir -p "$TMP/w/scripts" || return 2
+  mkdir -p "$TMP/w" || return 2
   cp SKILL.md "$TMP/w/SKILL.md" || return 2
   cp README.md README.zh-TW.md "$TMP/w/" || return 2
-  mkdir -p "$TMP/w/references" || return 2
-  cp references/prompt-template.md "$TMP/w/references/" || return 2
-  [ ! -f references/reflect-prompt.md ] ||
-    cp references/reflect-prompt.md "$TMP/w/references/" || return 2
-  cp scripts/*.sh scripts/*.py "$TMP/w/scripts/" 2>/dev/null
+  cp -R scripts references "$TMP/w/" || return 2
   [ -f install.sh ] && cp install.sh "$TMP/w/install.sh"
   return 0
 }
@@ -52,8 +48,8 @@ import fcntl, json, os, pathlib, shlex, subprocess, sys, threading, time
 
 root = pathlib.Path(sys.argv[1])
 tmp = root.parent
-sys.path.insert(0, str(root / "scripts"))
-from omp_events import scan_tools
+sys.path.insert(0, str(root / "scripts/engines/omp"))
+from events import scan_tools
 
 def event(kind, call, name="read", ok=True, args=None):
     row = {"type": kind, "toolCallId": call, "toolName": name}
@@ -89,7 +85,7 @@ def dispatch_fake(name, lines, *, delay=0, exit_code=0, max_tools=None, timeout=
     run_dir = tmp / name
     env = os.environ | {"PATH": f"{bindir}:{os.environ['PATH']}", "AGENT_START_STAGGER": "0",
                         "OMP_REGISTRY_DIR": str(tmp / f"{name}-registry")}
-    cmd = [root / "scripts/omp_agent.sh", "--run-dir", run_dir, "--label", "w",
+    cmd = [root / "scripts/agent.sh", "--engine", "omp", "--run-dir", run_dir, "--label", "w",
            "--prompt", "x", "--admission", "off", "--timeout", str(timeout)]
     if max_tools is not None:
         cmd += ["--max-tools", str(max_tools)]
@@ -133,7 +129,7 @@ def watch_incremental_identity():
     started_at = int(time.time())
     (agent / "started.json").write_text(json.dumps(
         {"started_at": started_at, "deadline": started_at + 1000, "timeout_s": 1000}))
-    cmd = [root / "scripts/omp_watch.sh", run_dir, "--timeout", "0", "--interval", "1",
+    cmd = [root / "scripts/watch.sh", run_dir, "--timeout", "0", "--interval", "1",
            "--reflect-tools", "999", "--reflect-min", "999999"]
     for expected in (1, 1):
         result = subprocess.run(cmd, capture_output=True, text=True)
@@ -164,7 +160,7 @@ def make_watch(name, successes, failures=0, age=0, deadline=2000, label="w"):
     return run_dir
 
 def poll_watch(run_dir, tools=100, minutes=45, state=None):
-    command = [root / "scripts/omp_watch.sh", run_dir, "--timeout", "0", "--interval", "1",
+    command = [root / "scripts/watch.sh", run_dir, "--timeout", "0", "--interval", "1",
                "--reflect-tools", str(tools), "--reflect-min", str(minutes)]
     if state is not None:
         command += ["--state", state]
@@ -196,7 +192,7 @@ def reflect_single_and_deadline():
     result = poll_watch(elapsed, state=custom_state)
     advertised = result.stdout.split("— ", 1)[1].strip()
     assert shlex.split(advertised) == [
-        str(root / "scripts/omp_reflect.sh"), str(elapsed), "w;echo bad",
+        str(root / "scripts/reflect.sh"), str(elapsed), "w;echo bad",
         "--trigger", "elapsed", "--state", str(custom_state)]
     late = make_watch("late-run", 100, age=3600, deadline=599)
     result = poll_watch(late)
@@ -272,7 +268,7 @@ def reflect_run(name, value, *, extra_events=(), env_extra=None, dry=False, exit
                         "AGENT_SLOTS_DIR": str(tmp / f"{name}-slots"),
                         "AGENT_ORCHESTRATION_ENV": str(tmp / "no-agent-env")}
     env.update(env_extra or {})
-    cmd = [root / "scripts/omp_reflect.sh", run_dir, "w"]
+    cmd = [root / "scripts/reflect.sh", run_dir, "w"]
     if trigger:
         cmd += ["--trigger", trigger]
     if dry:
@@ -445,14 +441,14 @@ def status_fixture(name, running=False):
     return run_dir
 
 def status_running_state():
-    result = subprocess.run([root / "scripts/omp_status.sh",
+    result = subprocess.run([root / "scripts/status.sh",
         status_fixture("status-running", True), "--brief"], capture_output=True, text=True)
     assert result.returncode == 0 and "tools=12 reflect=3[pending]" in result.stdout
 
 def status_finished_reports():
     run_dir = status_fixture("status-finished")
     for flag in ("--brief", "--full"):
-        result = subprocess.run([root / "scripts/omp_status.sh", run_dir, flag],
+        result = subprocess.run([root / "scripts/status.sh", run_dir, flag],
                                 capture_output=True, text=True)
         assert "reflect: 1 NO_ISSUE, 2 error" in result.stdout
 
@@ -462,7 +458,7 @@ def nested_runs_stay_isolated():
     nested.mkdir(parents=True)
     (nested / "meta.json").write_text(json.dumps(
         {"exit_code": 0, "worktree_branch": "omp/child"}))
-    wait = subprocess.run([root / "scripts/omp_wait.sh", run_dir, "--timeout", "0"],
+    wait = subprocess.run([root / "scripts/wait.sh", run_dir, "--timeout", "0"],
                           capture_output=True, text=True)
     assert wait.stdout.strip() == "w OK"
     parent_meta = run_dir / "agents/w/meta.json"
@@ -478,7 +474,7 @@ def nested_runs_stay_isolated():
         "*'rev-parse HEAD'*) echo abc;;\n"
         "esac\nexit 0\n")
     git.chmod(0o755)
-    merge = subprocess.run([root / "scripts/omp_merge.sh", "--run-dir", run_dir,
+    merge = subprocess.run([root / "scripts/merge.sh", "--run-dir", run_dir,
         "--repo", tmp, "--into", "main", "--dry-run"],
         env=os.environ | {"PATH": f"{bindir}:{os.environ['PATH']}"},
         capture_output=True, text=True)
@@ -486,7 +482,7 @@ def nested_runs_stay_isolated():
 
 def new_run_prompts_for_maintainer_words():
     base = tmp / "new-runs"
-    result = subprocess.run([root / "scripts/omp_new_run.sh", "probe"],
+    result = subprocess.run([root / "scripts/new_run.sh", "probe"],
         env=os.environ | {"OMP_RUNS_DIR": str(base)}, capture_output=True, text=True)
     assert result.returncode == 0
     assert "maintainer.md" in (pathlib.Path(result.stdout.strip()) / "PLAN.md").read_text()
@@ -638,18 +634,18 @@ expect 1 "install.sh does not parse" sh "$TMP/w/scripts/check-shell-syntax.sh"
 # An error in a dispatch script must be caught too, not only in install.sh. Break one that is
 # not the checker itself.
 fresh || exit 2
-victim=$(ls "$TMP"/w/scripts/*_note.sh 2>/dev/null | head -1)
-if [ -n "$victim" ]; then
-  printf '\nif [ 1 -eq 1 ]; then\n' >> "$victim"
-  expect 1 "a dispatch script does not parse" sh "$TMP/w/scripts/check-shell-syntax.sh"
-else
-  printf 'DEAD  a dispatch script does not parse: nothing to break\n'
-  fail=$((fail + 1))
-fi
+victim="$TMP/w/scripts/note.sh"
+[ -f "$victim" ] || { printf 'DEAD  a dispatch script does not parse: nothing to break\n'; exit 2; }
+printf '\nif [ 1 -eq 1 ]; then\n' >> "$victim"
+expect 1 "a dispatch script does not parse" sh "$TMP/w/scripts/check-shell-syntax.sh"
 
 fresh || exit 2
-printf '\ncase x in\n' >> "$TMP/w/scripts/omp_reflect.sh"
-expect 1 "omp_reflect.sh does not parse" sh "$TMP/w/scripts/check-shell-syntax.sh"
+printf '\ncase x in\n' >> "$TMP/w/scripts/reflect.sh"
+expect 1 "reflect.sh does not parse" sh "$TMP/w/scripts/check-shell-syntax.sh"
+
+fresh || exit 2
+printf '\ncase x in\n' >> "$TMP/w/scripts/engines/omp/agent.sh"
+expect 1 "engines/omp/agent.sh does not parse" sh "$TMP/w/scripts/check-shell-syntax.sh"
 
 
 if [ "$fail" -ne 0 ]; then

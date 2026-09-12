@@ -4,12 +4,12 @@ set -uo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: omp_worktrees.sh <run-dir> --list
-       omp_worktrees.sh <run-dir> --diff [BASE]         (default BASE: main)
-       omp_worktrees.sh <run-dir> --drift [BASE]
-       omp_worktrees.sh <run-dir> --rebase [BASE]
-       omp_worktrees.sh <run-dir> --remove-merged BASE
-       omp_worktrees.sh <run-dir> --remove-all
+Usage: worktrees.sh <run-dir> --list
+       worktrees.sh <run-dir> --diff [BASE]         (default BASE: main)
+       worktrees.sh <run-dir> --drift [BASE]
+       worktrees.sh <run-dir> --rebase [BASE]
+       worktrees.sh <run-dir> --remove-merged BASE
+       worktrees.sh <run-dir> --remove-all
 
 --drift reports how far each branch has fallen behind BASE and whether its agent is still
 running. --rebase moves the finished ones onto BASE, committing their pending work first, and
