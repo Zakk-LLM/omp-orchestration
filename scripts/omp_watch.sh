@@ -56,8 +56,9 @@ while :; do
   # Two orchestrators watching one run must not both claim the same completion, so the
   # read-modify-write of the seen-set happens under a lock.
   OUT=$(flock "$STATE.lock" env RUN_DIR="$RUN" STATE_FILE="$STATE" WARN_PCT="$WARN" \
-        PEEK="$PEEK" SCRIPTS_DIR="$HERE" python3 <<'PY'
-import json, os, pathlib, sys, time
+        PEEK="$PEEK" REFLECT_TOOLS="$REFLECT_TOOLS" REFLECT_MIN="$REFLECT_MIN" \
+        SCRIPTS_DIR="$HERE" python3 <<'PY'
+import json, os, pathlib, shlex, sys, time
 
 sys.path.insert(0, os.environ["SCRIPTS_DIR"])
 from omp_events import scan_tools
@@ -111,6 +112,8 @@ if not dispatched:
 
 now = time.time()
 warn_pct = int(os.environ.get("WARN_PCT", "80"))
+reflect_tools = int(os.environ["REFLECT_TOOLS"])
+reflect_seconds = int(os.environ["REFLECT_MIN"]) * 60
 changed, running, done = [], 0, 0
 count_state_changed = False
 for a in dispatched:
@@ -124,7 +127,8 @@ for a in dispatched:
     tools_key = f"{a.name}#tools"
     tools = seen.get(tools_key) or {}
     if started_at is not None:
-        if tools.get("started_at") != started_at:
+        identity_changed = tools.get("started_at") != started_at
+        if identity_changed:
             tools = {"started_at": started_at, "offset": 0, "count": 0}
         try:
             truncated = events.stat().st_size < int(tools.get("offset", 0))
@@ -138,6 +142,13 @@ for a in dispatched:
         if seen.get(tools_key) != updated:
             seen[tools_key] = updated
             count_state_changed = True
+        reflect_key = f"{a.name}#reflect"
+        reflect = seen.get(reflect_key) or {}
+        if identity_changed or not reflect:
+            reflect = {"n": int(reflect.get("n", 0)), "base_count": 0,
+                       "base_at": started_at, "pending": False}
+            seen[reflect_key] = reflect
+            count_state_changed = True
     meta = a / "meta.json"
     if not meta.exists():
         running += 1
@@ -148,6 +159,20 @@ for a in dispatched:
             continue
         left = int(s.get("deadline", 0) - now)
         limit = int(s.get("timeout_s") or 0)
+        reflect = seen[f"{a.name}#reflect"]
+        tool_due = updated["count"] - int(reflect.get("base_count", 0)) >= reflect_tools
+        time_due = now - float(reflect.get("base_at", started_at)) >= reflect_seconds
+        if (tool_due or time_due) and not reflect.get("pending") and left >= 600:
+            number = int(reflect.get("n", 0)) + 1
+            elapsed = max(0, int((now - float(reflect.get("base_at", started_at))) / 60))
+            trigger = "tools" if tool_due else "elapsed"
+            command = " ".join(shlex.quote(value) for value in
+                               ("omp_reflect.sh", str(run), a.name, "--trigger", trigger))
+            reflect["pending"] = True
+            seen[f"{a.name}#reflect"] = reflect
+            changed.append((a.name,
+                            f"REFLECT {number}: {updated['count']} tools, {elapsed} min elapsed "
+                            f"— {command}", "", ""))
         if limit and left <= limit * (100 - warn_pct) / 100:
             key = f"{a.name}#expiring"
             if key not in seen:
