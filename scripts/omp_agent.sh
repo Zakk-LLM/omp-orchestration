@@ -337,12 +337,17 @@ rm -f "$OUT/.prompt-with-schema.md"
 
 python3 - "$OUT" "$LABEL" "$CWD" "$THINKING" "$PERMISSION" "$CODE" "$((END - START))" \
          "$RESUME" "$STALLED" "$WORKTREE_BRANCH" "$BASE_SHA" "$MODEL" "$BASE_REF" \
-         "${SCHEMA:-}" "${ROLE:-}" <<'PY'
+         "${SCHEMA:-}" "${ROLE:-}" "$HERE" <<'PY'
 import json, sys, pathlib
 (out, label, cwd, thinking, permission, code, dur, resume, stalled, branch, base_sha,
- model, base_ref, schema, role) = sys.argv[1:16]
+ model, base_ref, schema, role, scripts) = sys.argv[1:17]
+sys.path.insert(0, scripts)
+from omp_events import scan_tools
 out = pathlib.Path(out)
-session, usage, errors, failed_tools, files, reconnects = None, {}, [], 0, set(), 0
+session, usage, errors, files, reconnects = None, {}, [], set(), 0
+tool_events, _ = scan_tools(out / "events.jsonl", 0)
+tool_calls = sum(event["ok"] for event in tool_events)
+failed_tools = len(tool_events) - tool_calls
 texts, cost = [], 0.0
 for line in (out / "events.jsonl").read_text(errors="replace").splitlines():
     line = line.strip()
@@ -385,8 +390,6 @@ for line in (out / "events.jsonl").read_text(errors="replace").splitlines():
                             path = head[1:].split("#", 1)[0].split("]", 1)[0]
                     if path:
                         files.add(path)
-                if c.get("isError") or c.get("is_error"):
-                    failed_tools += 1
     elif kind == "error":
         message = json.dumps(ev)
         if "Reconnect" in message or "retry" in message.lower():
@@ -421,7 +424,7 @@ meta = {
     "exit_code": code, "duration_s": int(dur), "thread_id": session, "usage": usage,
     "result_file": str(result) if result.exists() else None,
     "result_bytes": result.stat().st_size if result.exists() else 0,
-    "failed_commands": failed_tools, "files_touched": sorted(files),
+    "tool_calls": tool_calls, "failed_commands": failed_tools, "files_touched": sorted(files),
     "errors": errors[:5], "error_count": len(errors), "schema_error": schema_error,
     "timed_out": code in (124, 137) and stalled != "1",
     "stalled": stalled == "1", "reconnects": reconnects,
