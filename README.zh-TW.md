@@ -95,6 +95,8 @@ scripts/merge.sh --run-dir "$RUN" --repo /path/to/repo --into main --check "pyte
 - [references/worktrees.md](references/worktrees.md)
 - [references/review-gate.md](references/review-gate.md)
 - [references/troubleshooting.md](references/troubleshooting.md)
+- [omp 引擎參考](references/engines/omp.md)
+- [omp 引擎實證資料](references/engines/evidence-omp.md)
 
 ## 已知限制
 

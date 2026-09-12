@@ -113,6 +113,8 @@ siblings. Read [SKILL.md](SKILL.md) and `references/`:
 - [references/worktrees.md](references/worktrees.md)
 - [references/review-gate.md](references/review-gate.md)
 - [references/troubleshooting.md](references/troubleshooting.md)
+- [omp engine reference](references/engines/omp.md)
+- [omp engine evidence](references/engines/evidence-omp.md)
 
 ## Known constraints
 
