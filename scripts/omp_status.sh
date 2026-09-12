@@ -96,7 +96,7 @@ for a in agents:
                  m.get("result_file") or "", reflection_state(a, False)))
 
 w = max(len(r[0]) for r in rows)
-print(f"{'AGENT'.ljust(w)}  STATE      TIME    OUT-TOK   REFLECTION")
+print(f"{'AGENT'.ljust(w)}  STATE      TIME    OUT-TOK   REFLECTION   (TIME = elapsed, or left before the guard)")
 for name, state, dur, out, _, _, reflection in rows:
     print(f"{name.ljust(w)}  {state:<9}  {dur:>5}  {out:>7}   {reflection}")
 print(f"\ntotal input {tin} / output {tout} tokens across {len(rows)} agents")

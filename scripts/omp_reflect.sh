@@ -1,5 +1,16 @@
 #!/usr/bin/env bash
 # Run one bounded, read-only route inquiry without pausing or modifying the worker.
+#
+# The worker keeps running: this is the executable half of "at the hundredth step, ask once
+# whether this is still what the maintainer wanted". The verdict lands next to the worker as
+# reflect-<n>.json (or .error); what to do about it is the supervisor's call, sent through
+# omp_note.sh in their own words. Nothing here kills or re-dispatches anything.
+#
+# Bounds are enforced, not requested: ten completed tools via the wrapper's --max-tools and
+# the recount after exit, 390 seconds total (300 for the model plus the wrapper's 60-second
+# outer timeout and 30-second grace), one launch (AGENT_LOCK_RETRIES=1). The result is read
+# from last.txt and validated here, because the wrapper's --schema only parses JSON and would
+# accept an empty verdict.
 set -uo pipefail
 
 usage() {
@@ -127,6 +138,7 @@ ARGS=(--run-dir "$REFLECT_RUN" --label reflector --prompt-file "$PROMPT_OUT"
       --permission read-only --admission refuse --timeout 300 --max-tools 10 --tier "$TIER"
       --cwd "$REFLECT_RUN" --add-dir "$WORKER_CWD" --add-dir "$WORKER")
 [ -n "$MODEL" ] && ARGS+=(--model "$MODEL")
+# The prompt build and the state reads above already spent part of the budget.
 REMAINING=$((390 - ($(date +%s) - REFLECT_STARTED)))
 if [ "$REMAINING" -le 0 ]; then
   AGENT_CODE=124
@@ -206,6 +218,11 @@ if [ -n "$ERROR" ]; then
   printf '%s\nreflector: %s\n' "$ERROR" "$REFLECTOR" > "$WORKER/reflect-$NUMBER.error"
 fi
 
+# Re-read the state under the watch lock and merge: the snapshot taken before the inquiry is
+# stale by now, and writing it back would erase counts the watch recorded meanwhile. The new
+# baseline is the count at completion, so tools finished during the inquiry do not trigger the
+# next one at once. A worker restarted under the same label is a different run; its state is
+# left alone.
 mkdir -p "$(dirname "$STATE")"
 flock "$STATE.lock" env STATE_FILE="$STATE" LABEL="$LABEL" STARTED_AT="$STARTED_AT" \
   NUMBER="$NUMBER" WORKER="$WORKER" SCRIPTS="$HERE" python3 <<'PY'

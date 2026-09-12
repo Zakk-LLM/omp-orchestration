@@ -302,6 +302,11 @@ if [ "$STALL" -gt 0 ] 2>/dev/null; then
   WATCHER=$!
 fi
 
+# The tool budget is its own watcher rather than a branch of the stall loop: the stall loop
+# only exists when --stall is set, and a bounded inquiry sets no stall. Rescanning the whole
+# event file every two seconds is affordable only because a budgeted run is short by
+# definition; the hard edge is the recount after exit below, which invalidates the result
+# even when the kill here came too late.
 if [ "$MAX_TOOLS" -gt 0 ] 2>/dev/null && kill -0 "$AGENT_PID" 2>/dev/null; then
   ( while kill -0 "$AGENT_PID" 2>/dev/null; do
       sleep 2
