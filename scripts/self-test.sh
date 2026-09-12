@@ -572,6 +572,9 @@ cat "$TMP/out"
 fresh || exit 2
 sed -i '/^| `frontier` |/d' "$TMP/w/SKILL.md"
 expect 1 "a tier is missing" python3 scripts/check-contract.py "$ENGINE" "$TMP/w/SKILL.md"
+fresh || exit 2
+expect 0 "reflection status controls" python3 "$TMP/event-controls.py" "$TMP/w" status
+cat "$TMP/out"
 
 # An access profile disappears.
 fresh || exit 2

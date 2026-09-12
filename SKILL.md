@@ -212,6 +212,18 @@ means the run is finished; 3 means nothing was dispatched. Liveness is the event
 its last event read from the final 4 KB — never the whole log. `EXPIRING` and `QUIET` warn before
 the guards fire. Correct a running worker with `omp_note.sh`, which its spec tells it to re-read.
 
+When watch prints `REFLECT`, run the shown `omp_reflect.sh` command once. The inquiry has ten
+tools and at most 390 seconds including wrapper backstops; it is not progress:
+
+- `NO_ISSUE`: continue supervision.
+- `CANNOT_JUDGE`: inspect the named sources instead of re-dispatching.
+- `ROUTE_CORRECTION`: verify its exact quotes, then send only your correction with `omp_note.sh`.
+
+A direct maintainer correction requires `omp_reflect.sh <run> <label> --trigger maintainer`.
+Reflection is a reminder, not a pause: the worker keeps running and reads a correction only at
+its next live-notes checkpoint. With a custom watch `--state`, pass the same path to reflection;
+`omp_status.sh` reads only the default `<run>/.watch-state`.
+
 **Never sit idle.** From the first dispatch to the last review you are either processing a
 returned agent or doing work that does not depend on one. A regression you can fix now is fixed
 ahead of the queue.
