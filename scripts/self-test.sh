@@ -22,6 +22,8 @@ fresh() {
   cp README.md README.zh-TW.md "$TMP/w/" || return 2
   mkdir -p "$TMP/w/references" || return 2
   cp references/prompt-template.md "$TMP/w/references/" || return 2
+  [ ! -f references/reflect-prompt.md ] ||
+    cp references/reflect-prompt.md "$TMP/w/references/" || return 2
   cp scripts/*.sh scripts/*.py "$TMP/w/scripts/" 2>/dev/null
   [ -f install.sh ] && cp install.sh "$TMP/w/install.sh"
   return 0
@@ -562,6 +564,9 @@ cat "$TMP/out"
 fresh || exit 2
 sed -i 's/3600–5400/3600–9999/' "$TMP/w/SKILL.md"
 expect 1 "timeout drift" python3 scripts/check-contract.py "$ENGINE" "$TMP/w/SKILL.md"
+fresh || exit 2
+expect 0 "reflection inquiry controls" python3 "$TMP/event-controls.py" "$TMP/w" reflect
+cat "$TMP/out"
 
 # A whole tier disappears.
 fresh || exit 2
@@ -625,6 +630,11 @@ else
   printf 'DEAD  a dispatch script does not parse: nothing to break\n'
   fail=$((fail + 1))
 fi
+
+fresh || exit 2
+printf '\ncase x in\n' >> "$TMP/w/scripts/omp_reflect.sh"
+expect 1 "omp_reflect.sh does not parse" sh "$TMP/w/scripts/check-shell-syntax.sh"
+
 
 if [ "$fail" -ne 0 ]; then
   printf '%d passed, %d dead\n' "$pass" "$fail"
