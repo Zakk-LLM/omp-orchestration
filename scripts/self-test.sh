@@ -41,6 +41,19 @@ expect() {
   fi
 }
 
+# Prove the exact source text exists before a mutation. A stale sed expression must stop the
+# controls instead of turning a no-op into apparent coverage.
+require_count() {
+  want=$1
+  needle=$2
+  path=$3
+  got=$(grep -cF -- "$needle" "$path")
+  if [ "$got" -ne "$want" ]; then
+    printf 'DEAD  mutation source in %s: wanted %s copies, found %s\n' "$path" "$want" "$got"
+    exit 2
+  fi
+}
+
 # Shared event fixtures exercise the parser through both public consumers.
 fresh || exit 2
 cat > "$TMP/event-controls.py" <<'PY'
@@ -535,10 +548,15 @@ elif phase == "status":
 else:
     raise SystemExit(f"unknown phase {phase}")
 PY
-# Confirm the clean copy is green first. If the baseline were red, none of the breaks below
+# Confirm every contract mode is green first. If a baseline were red, none of the breaks below
 # would establish anything.
 fresh || exit 2
-expect 0 "baseline contract" python3 scripts/check-contract.py "$ENGINE" "$TMP/w/SKILL.md"
+expect 0 "baseline entry contract" python3 scripts/check-contract.py entry \
+  "$TMP/w/SKILL.md" "$TMP/w/README.md" "$TMP/w/README.zh-TW.md"
+expect 0 "baseline engine contract" python3 scripts/check-contract.py engine "$ENGINE" \
+  "$TMP/w/references/engines/omp.md"
+expect 0 "baseline template contract" python3 scripts/check-contract.py template \
+  "$TMP/w/references/prompt-template.md"
 fresh || exit 2
 expect 0 "reflection event controls" python3 "$TMP/event-controls.py" "$TMP/w" events
 cat "$TMP/out"
@@ -546,84 +564,96 @@ cat "$TMP/out"
 # The description loses this engine's read-only boundary. That was the actual state of all
 # three skills before this check existed.
 fresh || exit 2
+require_count 1 '`read-only` grants no `bash`' "$TMP/w/SKILL.md"
 python3 - "$TMP/w/SKILL.md" <<'PY'
-import re, sys
+import sys
 p = sys.argv[1]
 s = open(p, encoding="utf-8").read()
-head, rest = s.split("\n---\n", 1)
-# Drop the last sentence of the description; the boundary is that sentence.
-head = re.sub(r"(?m)^(description: .*)\.\s*[^.]*\.\s*$", r"\1.", head)
-open(p, "w", encoding="utf-8").write(head + "\n---\n" + rest)
+old = "`read-only` grants no `bash`"
+open(p, "w", encoding="utf-8").write(s.replace(old, "`read-only` grants no shell", 1))
 PY
-expect 1 "description without the boundary" python3 scripts/check-contract.py "$ENGINE" "$TMP/w/SKILL.md"
+expect 1 "description without the boundary" python3 scripts/check-contract.py entry \
+  "$TMP/w/SKILL.md" "$TMP/w/README.md" "$TMP/w/README.zh-TW.md"
 fresh || exit 2
 expect 0 "reflection trigger controls" python3 "$TMP/event-controls.py" "$TMP/w" triggers
 cat "$TMP/out"
 
 # The ladder drifts: deep falls from high to medium.
 fresh || exit 2
-sed -i 's/^| `deep` | `high`/| `deep` | `medium`/' "$TMP/w/SKILL.md"
-sed -i 's/| `high` | 1800–3600 |/| `medium` | 1800–3600 |/' "$TMP/w/SKILL.md"
-expect 1 "tier maps to the wrong effort" python3 scripts/check-contract.py "$ENGINE" "$TMP/w/SKILL.md"
+page="$TMP/w/references/engines/omp.md"
+require_count 1 '| `deep` | `high` | changes across several files, non-obvious bugs, refactors | 1800–3600 |' "$page"
+sed -i 's/^| `deep` | `high` |/| `deep` | `medium` |/' "$page"
+expect 1 "tier maps to the wrong effort" python3 scripts/check-contract.py engine "$ENGINE" "$page"
 fresh || exit 2
 expect 0 "reflection tool-budget controls" python3 "$TMP/event-controls.py" "$TMP/w" budget
 cat "$TMP/out"
 
 # A timeout drifts.
 fresh || exit 2
-sed -i 's/3600–5400/3600–9999/' "$TMP/w/SKILL.md"
-expect 1 "timeout drift" python3 scripts/check-contract.py "$ENGINE" "$TMP/w/SKILL.md"
+page="$TMP/w/references/engines/omp.md"
+require_count 1 '| `max` | `max` | one problem a `frontier` agent already failed twice | 3600–5400 |' "$page"
+sed -i 's/^| `max` | `max` | one problem a `frontier` agent already failed twice | 3600–5400 |$/| `max` | `max` | one problem a `frontier` agent already failed twice | 3600–9999 |/' "$page"
+expect 1 "timeout drift" python3 scripts/check-contract.py engine "$ENGINE" "$page"
 fresh || exit 2
 expect 0 "reflection inquiry controls" python3 "$TMP/event-controls.py" "$TMP/w" reflect
 cat "$TMP/out"
 
 # A whole tier disappears.
 fresh || exit 2
-sed -i '/^| `frontier` |/d' "$TMP/w/SKILL.md"
-expect 1 "a tier is missing" python3 scripts/check-contract.py "$ENGINE" "$TMP/w/SKILL.md"
+page="$TMP/w/references/engines/omp.md"
+require_count 1 '| `frontier` | `xhigh` | architecture, concurrency, performance, vague requirements | 3600–5400 |' "$page"
+sed -i '/^| `frontier` | `xhigh` | architecture, concurrency, performance, vague requirements | 3600–5400 |$/d' "$page"
+expect 1 "a tier is missing" python3 scripts/check-contract.py engine "$ENGINE" "$page"
 fresh || exit 2
 expect 0 "reflection status controls" python3 "$TMP/event-controls.py" "$TMP/w" status
 cat "$TMP/out"
 
 # An access profile disappears.
 fresh || exit 2
-sed -i '/^| `workspace-write` |/d' "$TMP/w/SKILL.md"
-expect 1 "an access profile is missing" python3 scripts/check-contract.py "$ENGINE" "$TMP/w/SKILL.md"
+page="$TMP/w/references/engines/omp.md"
+require_count 1 '| `workspace-write` | plus `write, edit, bash, ast_edit` | implementation |' "$page"
+sed -i '/^| `workspace-write` | plus `write, edit, bash, ast_edit` | implementation |$/d' "$page"
+expect 1 "an access profile is missing" python3 scripts/check-contract.py engine "$ENGINE" "$page"
 
 # The README loses the sentence saying these profile names do not carry to the siblings.
 # Codex's README once said its read-only "reads only", contradicting its own SKILL.md; this
 # is the control for that class of regression.
 for r in README.md README.zh-TW.md; do
   fresh || exit 2
-  python3 - "$TMP/w/$r" <<'PY'
-import sys
-p = sys.argv[1]
-marks = ["omp 自己的", "opencode 自己的", "profile names are",
-         "不能沿用到姊妹引擎",
-         "does not carry to the siblings"]
-lines = open(p, encoding="utf-8").read().split("\n")
-keep = [l for l in lines if not any(m in l for m in marks)]
-open(p, "w", encoding="utf-8").write("\n".join(keep))
-PY
-  expect 1 "$r without the cross-engine note" python3 scripts/check-contract.py "$ENGINE" "$TMP/w/SKILL.md"
+  case "$r" in
+    README.md) needle="These profile names are omp's own." ;;
+    README.zh-TW.md) needle='這些設定檔名稱是 omp 自己的。' ;;
+  esac
+  require_count 1 "$needle" "$TMP/w/$r"
+  sed -i "\|$needle|d" "$TMP/w/$r"
+  expect 1 "$r without the cross-engine note" python3 scripts/check-contract.py entry \
+    "$TMP/w/SKILL.md" "$TMP/w/README.md" "$TMP/w/README.zh-TW.md"
 done
 
 # An evidence rule drops out of the worker prompt template. This happened: one sibling gained
 # a rule and the other two kept the shorter list.
 fresh || exit 2
-sed -i '/^- A number is a claim/,+2d' "$TMP/w/references/prompt-template.md"
-expect 1 "prompt template lost an evidence rule" python3 scripts/check-contract.py "$ENGINE" "$TMP/w/SKILL.md"
+template="$TMP/w/references/prompt-template.md"
+require_count 1 '- A number is a claim' "$template"
+sed -i '/^- A number is a claim/,+2d' "$template"
+expect 1 "prompt template lost an evidence rule" python3 scripts/check-contract.py template "$template"
 
 fresh || exit 2
 rm -f "$TMP/w/references/prompt-template.md"
-expect 2 "the prompt template is missing" python3 scripts/check-contract.py "$ENGINE" "$TMP/w/SKILL.md"
+expect 2 "the prompt template is missing" python3 scripts/check-contract.py template \
+  "$TMP/w/references/prompt-template.md"
 
 # Input that cannot be read is 2, not a finding.
-expect 2 "SKILL.md does not exist" python3 scripts/check-contract.py "$ENGINE" "$TMP/does-not-exist.md"
-expect 2 "unknown engine name" python3 scripts/check-contract.py nosuchengine SKILL.md
+expect 2 "SKILL.md does not exist" python3 scripts/check-contract.py entry \
+  "$TMP/does-not-exist.md" README.md README.zh-TW.md
+expect 2 "engine page does not exist" python3 scripts/check-contract.py engine "$ENGINE" \
+  "$TMP/does-not-exist.md"
+expect 2 "unknown engine name" python3 scripts/check-contract.py engine nosuchengine \
+  references/engines/omp.md
 fresh || exit 2
 rm -f "$TMP/w/README.zh-TW.md"
-expect 2 "a README is missing" python3 scripts/check-contract.py "$ENGINE" "$TMP/w/SKILL.md"
+expect 2 "a README is missing" python3 scripts/check-contract.py entry \
+  "$TMP/w/SKILL.md" "$TMP/w/README.md" "$TMP/w/README.zh-TW.md"
 
 # Shell syntax: the clean copy is green, an injected error is red.
 fresh || exit 2

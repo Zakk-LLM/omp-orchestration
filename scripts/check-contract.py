@@ -1,20 +1,5 @@
 #!/usr/bin/env python3
-"""The three orchestration skills share one tier ladder and share nothing about access.
-
-This check holds two things: the ladder still projects to the agreed values, and the
-description states this engine's read-only execution boundary.
-
-Why the boundary belongs in the description: when a skill is selected, the description is
-the only text read. All three opening paragraphs used to be near-identical and none said
-whether its read-only profile could run a command, so an audit that had to execute checks
-was dispatched to omp's read-only — a profile with no bash at all — and the round was lost.
-What is asserted is that sentence, not its length, its position, or how it differs from a
-sibling's. Those all move when the sentence moves, which makes them proxies rather than the
-thing.
-
-No sibling repository is compared. A cross-repository checkout would pin every single-repo
-pull request to the other two heads, and what is actually wanted here — each skill stating
-its own boundary — is decidable inside one repository.
+"""Check entry documents, one engine page, or the shared prompt template.
 
 Exit codes: 0 all assertions hold, 1 the contract is broken, 2 the check could not run.
 """
@@ -56,6 +41,7 @@ ENGINES = {
         },
     },
 }
+INTEGRATED_ENGINES = ("omp",)
 
 # The evidence rules a read-only worker is given. They are the same on all three engines and
 # have already drifted once: a rule was added to one sibling's template and the other two kept
@@ -90,6 +76,13 @@ def frontmatter(text):
     return text[4:end]
 
 
+def name_of(fm):
+    for line in fm.split("\n"):
+        if line.startswith("name:"):
+            return line[len("name:"):].strip() or None
+    return None
+
+
 def description_of(fm):
     out, taking = [], False
     for line in fm.split("\n"):
@@ -100,7 +93,8 @@ def description_of(fm):
             out.append(line.strip())
         elif taking:
             break
-    return " ".join(out) if out else None
+    value = " ".join(out)
+    return value if value else None
 
 
 def projections(text):
@@ -131,34 +125,70 @@ def projections(text):
     return tier_effort, effort_timeout, tier_timeout
 
 
-def main():
-    if len(sys.argv) != 3:
-        print("usage: check-contract.py <engine> <SKILL.md>", file=sys.stderr)
-        return 2
-    engine, path = sys.argv[1], Path(sys.argv[2])
-    if engine not in ENGINES:
-        print("unknown engine: %s" % engine, file=sys.stderr)
-        return 2
+def read_text(path):
     try:
-        text = path.read_text(encoding="utf-8")
+        return path.read_text(encoding="utf-8")
     except OSError as exc:
         print("cannot read %s: %s" % (path, exc), file=sys.stderr)
-        return 2
-    spec = ENGINES[engine]
-    bad = []
+        return None
 
-    fm = frontmatter(text)
+
+def report_findings(path, bad):
+    if not bad:
+        return False
+    for line in bad:
+        print("%s: %s" % (path, line))
+    return True
+
+
+def check_entry(skill_path, readme_path, readme_zh_path):
+    skill = read_text(skill_path)
+    readmes = [read_text(readme_path), read_text(readme_zh_path)]
+    if skill is None or any(body is None for body in readmes):
+        return 2
+
+    bad = []
+    fm = frontmatter(skill)
     if fm is None:
-        bad.append("no YAML frontmatter, so there is no description to read")
+        bad.append("no YAML frontmatter, so there is no name or description to read")
     else:
-        if ("name: %s" % engine) not in fm:
-            bad.append("frontmatter name is not %s" % engine)
+        if name_of(fm) is None:
+            bad.append("frontmatter has no name")
         desc = description_of(fm)
         if desc is None:
             bad.append("frontmatter has no description")
-        elif spec["boundary"] not in flat(desc):
-            bad.append("description does not state %s's read-only execution boundary; "
-                       "missing: %s" % (engine, spec["boundary"]))
+        else:
+            for engine in INTEGRATED_ENGINES:
+                boundary = ENGINES[engine]["boundary"]
+                if boundary not in flat(desc):
+                    bad.append("description does not state %s's read-only execution boundary; "
+                               "missing: %s" % (engine, boundary))
+
+    readme_specs = [
+        (readme_path, readmes[0], ENGINES["omp"]["readme"]["README.md"]),
+        (readme_zh_path, readmes[1], ENGINES["omp"]["readme"]["README.zh-TW.md"]),
+    ]
+    for path, body, needle in readme_specs:
+        if needle not in flat(body):
+            bad.append("%s does not say omp's profile names do not carry to the siblings; "
+                       "missing: %s" % (path, needle))
+
+    if report_findings(skill_path, bad):
+        return 1
+    print("%s: contract intact — frontmatter, %d engine boundary, 2 README notes" %
+          (skill_path, len(INTEGRATED_ENGINES)))
+    return 0
+
+
+def check_engine(engine, path):
+    if engine not in ENGINES:
+        print("unknown engine: %s" % engine, file=sys.stderr)
+        return 2
+    text = read_text(path)
+    if text is None:
+        return 2
+    spec = ENGINES[engine]
+    bad = []
 
     tier_effort, effort_timeout, tier_timeout = projections(text)
     for tier in TIERS:
@@ -188,41 +218,46 @@ def main():
         if profile not in listed:
             bad.append("the access table has no `%s` row" % profile)
 
-    # The README is the second place permissions are explained and the first one a reader
-    # meets. Codex's README once said its read-only "reads only" while the SKILL.md in the
-    # same repository spent a paragraph saying it runs any command. Two documents in one
-    # repository contradicted each other, and the misleading half was the one that steers a
-    # reader away from the right profile. So the sentence is held here too.
-    for name, needle in spec["readme"].items():
-        rp = path.parent / name
-        try:
-            body = rp.read_text(encoding="utf-8")
-        except OSError as exc:
-            print("cannot read %s: %s" % (rp, exc), file=sys.stderr)
-            return 2
-        if needle not in flat(body):
-            bad.append("%s does not say these profile names do not carry to the siblings; "
-                       "missing: %s" % (name, needle))
+    if report_findings(path, bad):
+        return 1
+    print("%s: contract intact — %d tiers, %d access profiles" %
+          (path, len(TIERS), len(spec["profiles"])))
+    return 0
 
-    tp = path.parent / "references" / "prompt-template.md"
-    try:
-        template = flat(tp.read_text(encoding="utf-8"))
-    except OSError as exc:
-        print("cannot read %s: %s" % (tp, exc), file=sys.stderr)
+
+def check_template(path):
+    body = read_text(path)
+    if body is None:
         return 2
+    template = flat(body)
+    bad = []
     for rule in EVIDENCE_RULES:
         if rule not in template:
-            bad.append("references/prompt-template.md is missing an evidence rule: %s" % rule)
-
-    if bad:
-        for line in bad:
-            print("%s: %s" % (path, line))
+            bad.append("prompt template is missing an evidence rule: %s" % rule)
+    if report_findings(path, bad):
         return 1
-    print("%s: contract intact — %d tiers, %d access profiles, %d READMEs carry the "
-          "cross-engine note, %d evidence rules in the prompt template" %
-          (path, len(TIERS), len(spec["profiles"]), len(spec["readme"]),
-           len(EVIDENCE_RULES)))
+    print("%s: contract intact — %d evidence rules" % (path, len(EVIDENCE_RULES)))
     return 0
+
+
+def usage():
+    print("usage: check-contract.py entry <SKILL.md> <README.md> <README.zh-TW.md>\n"
+          "       check-contract.py engine <engine> <references/engines/<engine>.md>\n"
+          "       check-contract.py template <references/prompt-template.md>", file=sys.stderr)
+    return 2
+
+
+def main():
+    if len(sys.argv) < 2:
+        return usage()
+    mode = sys.argv[1]
+    if mode == "entry" and len(sys.argv) == 5:
+        return check_entry(*(Path(value) for value in sys.argv[2:]))
+    if mode == "engine" and len(sys.argv) == 4:
+        return check_engine(sys.argv[2], Path(sys.argv[3]))
+    if mode == "template" and len(sys.argv) == 3:
+        return check_template(Path(sys.argv[2]))
+    return usage()
 
 
 if __name__ == "__main__":
