@@ -67,7 +67,7 @@ A read-only agent holds about 217 MB RSS, measured across four concurrent worker
 machine (215, 217, 217, 218). On a 32-thread box with 33 GB free that allows well over a
 hundred by memory alone, so memory is not what limits a fan-out: the API's rate limit is, where
 one exists, and the reviewer's throughput is, always. The per-agent estimates in
-`omp_capacity.sh` stay above the measurement on purpose, because `medium` and `heavy` are meant
+`capacity.sh` stay above the measurement on purpose, because `medium` and `heavy` are meant
 to cover the test runners and compilers an agent spawns, which this measurement does not.
 
 Twelve agents launched one second apart produced zero lock retries, so the two-second default

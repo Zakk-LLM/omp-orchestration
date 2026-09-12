@@ -31,10 +31,10 @@ Specifically, none of these is a reason to accept:
    features stubbed, a fixture that now returns the expected value.
 6. **Write the verdict with its evidence** into `<run>/REVIEW.md`.
 
-`omp_verify.sh` mechanizes steps 2 and 3 and refuses to return `verified` when no check ran:
+`verify.sh` mechanizes steps 2 and 3 and refuses to return `verified` when no check ran:
 
 ```sh
-"$OMP_SKILL/scripts/omp_verify.sh" "$RUN" auth-cache \
+"$OMP_SKILL/scripts/verify.sh" "$RUN" auth-cache \
   --check "pytest tests/test_auth.py -q" --check "ruff check src/"
 ```
 

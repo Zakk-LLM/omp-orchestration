@@ -2,7 +2,7 @@
 
 ## The agent never returns
 
-`omp -p` waits on inherited stdin, so `omp_agent.sh` passes the prompt as an argument and
+`omp -p` waits on inherited stdin, so `agent.sh --engine omp` passes the prompt as an argument and
 redirects stdin from `/dev/null`.
 
 omp does have an internal deadline: the wrapper passes `--max-time` from `--timeout`, and the
@@ -16,7 +16,7 @@ A repeated timeout is a decomposition problem, not a timeout-value problem.
 ## `database is locked` when several agents start at once
 
 omp keeps session state in a shared store, and four processes reaching it in the same instant lose
-to a busy database. `omp_agent.sh` serializes launches machine-wide behind a short hold
+to a busy database. `agent.sh --engine omp` serializes launches machine-wide behind a short hold
 (`AGENT_START_STAGGER`, default 2 seconds) so a fan-out ramps in, and retries a launch that died
 on a lock with quadratic backoff (`AGENT_LOCK_RETRIES`, default 4). A retry is only attempted
 when the run produced no real events: a lock error happens before the model does anything, so
@@ -80,7 +80,7 @@ is dispatched. See [worktrees.md](worktrees.md).
 
 `--worktree` needs `--cwd` to be a git repository, and the branch name `omp/<name>` must be
 free unless the worktree is being reused deliberately. A leftover worktree from an aborted run
-blocks reuse of the same path: `omp_worktrees.sh <run> --list` shows what is registered, and
+blocks reuse of the same path: `worktrees.sh <run> --list` shows what is registered, and
 `--remove-merged <base>` removes only what has already landed.
 
 ## The worker committed anyway
@@ -127,6 +127,6 @@ The failed inquiry is recorded and is never re-dispatched automatically.
 
 ## Cost control
 
-`omp_status.sh` totals the token usage per run. When output tokens run high for the value
+`status.sh` totals the token usage per run. When output tokens run high for the value
 returned, the usual causes are an effort level above what the task needs, a spec so vague the
 worker explores the repository first, or a missing schema letting it write an essay.

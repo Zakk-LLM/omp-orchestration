@@ -1,6 +1,6 @@
 # Output schemas
 
-omp has no structured-output flag for print mode. `omp_agent.sh --schema FILE` appends the schema to the prompt
+omp has no structured-output flag for print mode. `agent.sh --engine omp --schema FILE` appends the schema to the prompt
 as an output contract and validates the final message after the run: valid JSON is written to
 `<run>/agents/<label>/result.json`, and anything else sets `schema_error` in `meta.json` and
 exits 65. The model is asked, not forced, so a violation is a real outcome — treat it as a failed

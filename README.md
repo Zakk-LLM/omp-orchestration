@@ -60,19 +60,19 @@ accepts URLs, but a worker that must search needs `--permission full`.
 ## Usage
 
 ```bash
-RUN=$(scripts/omp_new_run.sh add-auth-cache)
-scripts/omp_agents.sh --list          # every engine's agents, machine-wide
-scripts/omp_capacity.sh medium
+RUN=$(scripts/new_run.sh add-auth-cache)
+scripts/agents.sh --list          # every engine's agents, machine-wide
+scripts/capacity.sh medium
 
-scripts/omp_agent.sh --run-dir "$RUN" --label cache \
+scripts/agent.sh --engine omp --run-dir "$RUN" --label cache \
   --cwd /path/to/repo --worktree --permission workspace-write \
   --tier deep --timeout 1800 --stall 300 \
   --prompt-file "$RUN/agents/cache/prompt.md" --schema "$RUN/schema/impl.json"
 
-scripts/omp_dispatch.sh --run-dir "$RUN" --jobs "$RUN/jobs.jsonl" --weight medium
-scripts/omp_watch.sh "$RUN" --timeout 120 --peek
-scripts/omp_verify.sh "$RUN" cache --check "pytest -q"
-scripts/omp_merge.sh --run-dir "$RUN" --repo /path/to/repo --into main --check "pytest -q"
+scripts/dispatch.sh --run-dir "$RUN" --jobs "$RUN/jobs.jsonl" --weight medium
+scripts/watch.sh "$RUN" --timeout 120 --peek
+scripts/verify.sh "$RUN" cache --check "pytest -q"
+scripts/merge.sh --run-dir "$RUN" --repo /path/to/repo --into main --check "pytest -q"
 ```
 
 Every script documents its options under `--help`.

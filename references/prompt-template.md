@@ -41,7 +41,7 @@ code. Do not report success from reading the code. List anything you could not v
 State `blocked` rather than inventing a way around a requirement that contradicts the code.
 
 ## Regression check
-<Paste the output of `omp_impact.sh --repo <repo> --format md` here.>
+<Paste the output of `impact.sh --repo <repo> --format md` here.>
 
 Check only what your change can plausibly break, and find it mechanically rather than by
 reading the repository:

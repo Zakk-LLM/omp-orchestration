@@ -57,7 +57,7 @@ worker that must *search* needs `--permission full`, where MCP search tools are 
 
 ```sh
 omp --version || echo "omp not installed — stop and tell the user"
-"$OMP_SKILL/scripts/omp_agents.sh" --list      # every engine's agents, machine-wide
+"$OMP_SKILL/scripts/agents.sh" --list      # every engine's agents, machine-wide
 omp models | head                              # models this config can actually reach
 ```
 
@@ -69,7 +69,7 @@ Verified at 32 concurrent on one machine.
 
 What that number never covers is your review capacity. Thirty agents can run while three can be
 reviewed properly, so a high cap belongs to uniform mechanical work whose review is batched, and
-the working default stays at about three review-bearing agents in flight. `omp_capacity.sh`
+the working default stays at about three review-bearing agents in flight. `capacity.sh`
 still bounds the answer by cores, free memory, and load, with a soft ceiling of 8 that
 `AGENT_CONCURRENCY_CEILING` raises for a run that has earned it.
 
@@ -84,7 +84,7 @@ capacity, not the worker count, is the limit — about three review-bearing agen
 
 Never dispatched, however large the run:
 
-- **Git mechanics** — `omp_worktrees.sh --rebase` and `omp_merge.sh` do them in one command, and
+- **Git mechanics** — `worktrees.sh --rebase` and `merge.sh` do them in one command, and
   the spec forbids workers from running them anyway.
 - **A fix faster to make than to specify** — a typo, a wrong constant, a one-line guard.
 - **Anything you must verify line by line anyway** — review is the expensive half.
@@ -99,7 +99,7 @@ holds a slot the machine cap counts and puts a review ahead of one that mattered
 ### 1. Create the run directory
 
 ```sh
-RUN=$("$OMP_SKILL/scripts/omp_new_run.sh" add-auth-cache)
+RUN=$("$OMP_SKILL/scripts/new_run.sh" add-auth-cache)
 ```
 
 ```
@@ -135,7 +135,7 @@ rejected before anything starts.
 
 One file per agent from [references/prompt-template.md](references/prompt-template.md), with the
 scope fence, executable acceptance criteria, the live-notes block, and the prohibitions. Paste
-the regression scope from `omp_impact.sh --repo <repo> --format md` instead of letting the worker
+the regression scope from `impact.sh --repo <repo> --format md` instead of letting the worker
 search for it; each agent runs the targeted tests and the full suite runs once at integration.
 
 ### 4. Pick the tier, the profile, and the limits
@@ -188,7 +188,7 @@ run.
 ### 5. Dispatch
 
 ```sh
-"$OMP_SKILL/scripts/omp_dispatch.sh" --run-dir "$RUN" --jobs "$RUN/jobs.jsonl" \
+"$OMP_SKILL/scripts/dispatch.sh" --run-dir "$RUN" --jobs "$RUN/jobs.jsonl" \
   --weight medium --max 4        # --dry-run prints the commands first
 ```
 
@@ -204,15 +204,15 @@ Engine-specific rules:
 ### 6. Supervise without idling
 
 ```sh
-"$OMP_SKILL/scripts/omp_watch.sh" "$RUN" --timeout 120 --peek
+"$OMP_SKILL/scripts/watch.sh" "$RUN" --timeout 120 --peek
 ```
 
 Exit 0 means agents changed state; 1 means the window is free for work that needs no agent; 2
 means the run is finished; 3 means nothing was dispatched. Liveness is the event log's mtime plus
 its last event read from the final 4 KB — never the whole log. `EXPIRING` and `QUIET` warn before
-the guards fire. Correct a running worker with `omp_note.sh`, which its spec tells it to re-read.
+the guards fire. Correct a running worker with `note.sh`, which its spec tells it to re-read.
 
-When watch prints `REFLECT`, run the shown `omp_reflect.sh` command once; it is a reminder,
+When watch prints `REFLECT`, run the shown `reflect.sh` command once; it is a reminder,
 not a pause. The three verdicts and what each asks of you: [references/reflect.md](references/reflect.md).
 
 **Never sit idle.** From the first dispatch to the last review you are either processing a
@@ -224,7 +224,7 @@ ahead of the queue.
 The context that needs protecting is yours. A worker's context is disposable — created for one
 task, gone with it — so let workers read whatever they need, and never split a task or shorten a
 spec to save a worker's context. Only the report is bounded, because that is the part that lands
-in you: read `result.json` and `verify.json`, use `omp_status.sh --brief` as the digest, open
+in you: read `result.json` and `verify.json`, use `status.sh --brief` as the digest, open
 `events.jsonl` only when something failed, and refer to artifacts by path instead of quoting
 them. Summarize for the user from the diff and the check results, not from the worker's prose.
 
@@ -233,7 +233,7 @@ them. Summarize for the user from the diff and the check results, not from the w
 An agent's report is a claim; a command you ran is evidence.
 
 ```sh
-"$OMP_SKILL/scripts/omp_verify.sh" "$RUN" impl --check "pytest -q"
+"$OMP_SKILL/scripts/verify.sh" "$RUN" impl --check "pytest -q"
 ```
 
 Read the diff, check every changed file against the declared scope, run each acceptance
@@ -244,7 +244,7 @@ worker that cost a dollar for a rename was dispatched at the wrong tier. Protoco
 ### 8. Fix rounds and continuation
 
 ```sh
-"$OMP_SKILL/scripts/omp_agent.sh" --run-dir "$RUN" --label impl-fix1 \
+"$OMP_SKILL/scripts/agent.sh" --engine omp --run-dir "$RUN" --label impl-fix1 \
   --resume "$(cat "$RUN/agents/impl/thread.txt")" --cwd /path/to/repo \
   --permission workspace-write --tier deep --prompt-file "$RUN/agents/impl-fix1/prompt.md"
 ```
@@ -256,13 +256,13 @@ the user with its evidence rather than silently retried.
 ### 9. Integrate, then ship
 
 ```sh
-"$OMP_SKILL/scripts/omp_merge.sh" --run-dir "$RUN" --repo /path/to/repo --into main \
+"$OMP_SKILL/scripts/merge.sh" --run-dir "$RUN" --repo /path/to/repo --into main \
   --check "pytest -q" --rebase
 ```
 
 Atomic per branch and for the run: any conflict, failed rebase, or failed check returns the
 target to the commit the run started from. This is where the full suite belongs. Check drift
-first with `omp_worktrees.sh "$RUN" --drift main`. You perform every irreversible step, and
+first with `worktrees.sh "$RUN" --drift main`. You perform every irreversible step, and
 confirm with the user before anything outward-facing.
 
 ## References
